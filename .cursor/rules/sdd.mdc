@@ -1,0 +1,15 @@
+---
+description: Spec-Driven Development phase gates
+alwaysApply: true
+---
+
+# Spec-Driven Development
+
+Before implementing a public API change or changing library behavior:
+
+1. Read or create `specs/<feature>/SPEC.md` with BDD acceptance criteria and out-of-scope items
+2. Get spec approval before writing contracts or code
+3. Write tests from the BDD scenarios before implementation
+4. If implementation reveals a spec gap, update the spec first — do not silently change behavior
+
+New features require all four phases. Refactors must keep existing specs green or update specs explicitly.

@@ -1,0 +1,23 @@
+---
+description: Pointer to vendored playbooks and project adaptations
+alwaysApply: true
+---
+
+# Reference Playbooks
+
+This repo follows Spec-Driven Development. Playbooks live under `docs/playbooks/`.
+
+## Before architectural or feature work
+
+1. Read `memory/activeContext.md` and `memory/progress.md` (session state; see `agent-memory.mdc`)
+2. Read `AGENTS.md` (Phase Gate Protocol)
+3. Read `docs/playbooks/SwiftBeans-adaptations.md` (project-specific overrides)
+4. Read `docs/playbooks/spec-driven-development.md` when you need deeper SDD context
+
+## Priority when docs conflict
+
+`specs/<feature>/SPEC.md` → `SwiftBeans-adaptations.md` → `.cursor/rules/` → playbooks → generic examples in playbooks.
+
+## Skills
+
+Use `.cursor/skills/sdd-feature/` for this repo’s feature workflow. For Swift Testing, use `modernize-tests`. Project adaptations win on package layout and phase gates.

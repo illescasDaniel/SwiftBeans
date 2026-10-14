@@ -1,0 +1,20 @@
+{
+	"mcpServers": {
+		"codenav-swift": {
+			"command": "codenav-swift-mcp",
+			"args": [],
+			"env": {
+				"CODENAV_SWIFT_WRITE": "1"
+			}
+		},
+		"xcode-tools": {
+			"command": "uvx",
+			"args": ["--from", "mcpbridge-wrapper", "mcpbridge-wrapper", "--broker"]
+		},
+		"jevmem": {
+			"type": "stdio",
+			"command": "uvx",
+			"args": ["--from", "jevmem", "jevmem-mcp"]
+		}
+	}
+}
