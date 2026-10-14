@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-14 — Example multiplatform (iOS + macOS) + rename
+
+**Context:** `SwiftBeansExample` (formerly `SwiftBeansIOSExample`) was locked to iOS-only after Previews failed on **My Mac** (`NoBuildableEntriesError`). That failure was later traced mainly to nesting `Examples/` under a whole-repo `Packages/SwiftBeans` symlink and dual open workspaces, not to macOS support itself.
+
+**Decision:** Re-enable native `macosx` (`SUPPORTED_PLATFORMS` includes `macosx`, `SDKROOT = auto`, macOS runpath). Keep selective `Packages/SwiftBeans` symlinks. Keep the normal `#Preview` construct + `.task { await refresh() }` (no seeded preview state). Rename folder/target/scheme/docs to `SwiftBeansExample`.
+
+**Rationale:** Same package layout that fixed Previews also makes My Mac eligible; multiplatform matches the library’s macOS 15 / iOS 18 platforms and drops the misleading “iOS” name. Async load in Preview is real app behavior — Xcode updates the canvas when `@Observable` state changes.
+
 ## 2026-10-14 — Registry create-outside-lock for nested singletons
 
 **Context:** Launching the MVVM example crashed with `_os_unfair_lock_recursive_abort` in `SwiftBeansRegistry.singleton`: resolving `fetchItemsUseCase` held `Mutex` while its factory resolved `itemRepository`, which locked again.
@@ -12,7 +20,7 @@
 
 **Context:** Previews failed with `NoBuildableEntriesError` / empty `buildableEntries` while target containment still listed `ItemListView.swift`. Diagnostics showed destination **My Mac**; the example was also multiplatform (`macosx` in `SUPPORTED_PLATFORMS`). A repo-root `Packages/SwiftBeans` symlink nested `Examples/` under the package path. Having the repo-root Swift package window open alongside the example `.xcodeproj` also blocked Previews.
 
-**Decision:** (1) Shared `SwiftBeansIOSExample` scheme; target iOS-only (`iphoneos` / `iphonesimulator`). (2) `Packages/SwiftBeans` is a directory of symlinks to `Package.swift` / `Sources` / `Plugins` / `Tests` only (not the whole repo). (3) Open the example project alone for Previews; use an iOS Simulator destination.
+**Decision:** (1) Shared `SwiftBeansExample` scheme; target iOS-only (`iphoneos` / `iphonesimulator`). (2) `Packages/SwiftBeans` is a directory of symlinks to `Package.swift` / `Sources` / `Plugins` / `Tests` only (not the whole repo). (3) Open the example project alone for Previews; use an iOS Simulator destination.
 
 **Rationale:** Xcode package resolution still likes the named local folder; avoiding the Examples nest + My Mac + dual-workspace ambiguity made `#Preview` render successfully.
 
@@ -30,7 +38,7 @@
 
 **Decision:** Attach plugins in `project.pbxproj` as `XCSwiftPackageProductDependency` with `productName = "plugin:SwiftBeansPlugin"` plus a `PBXTargetDependency`. Registry property is **internal** (not `fileprivate`) so generated extensions compile. Generated file imports `Foundation`.
 
-**Rationale:** Matches what Xcode writes; verified with iOS Simulator build of `Examples/SwiftBeansIOSExample`.
+**Rationale:** Matches what Xcode writes; verified with iOS Simulator build of `Examples/SwiftBeansExample`.
 
 ## 2026-10-14 — Phase 4: registry storage + Mutex platforms
 
@@ -44,7 +52,7 @@
 
 **Context:** BDD scenarios need a compilable API before macros/plugin exist; IR validation is pure and testable without parsing.
 
-**Decision:** Add `SwiftBeansGeneratorCore` with `BeanGraphValidator` (implemented) and `BeanSourceParser` (stub `notImplemented`). Runtime accessor scenarios are `@Test(.disabled)` until Phase 4 codegen. Example iOS app lives under `Examples/SwiftBeansIOSExample/` after Phase 4, human-owned.
+**Decision:** Add `SwiftBeansGeneratorCore` with `BeanGraphValidator` (implemented) and `BeanSourceParser` (stub `notImplemented`). Runtime accessor scenarios are `@Test(.disabled)` until Phase 4 codegen. Example iOS app lives under `Examples/SwiftBeansExample/` after Phase 4, human-owned.
 
 **Rationale:** Unblocks Phase 3 SDD gate while keeping discovery/codegen for Phase 4.
 

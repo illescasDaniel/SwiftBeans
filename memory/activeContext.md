@@ -4,18 +4,17 @@ _Last updated: 2026-10-14_
 
 ## Branch
 
-- `main` (Phase 2–4 + MVVM example committed)
+- `main`
 
 ## Current focus
 
-None — compile-time DI + iOS example are on `main`.
+None — example multiplatform rename committed on `main`.
 
 ## Just changed
 
-- `.gitignore`: `.build/` (any depth) + `.swiftpm/.../xcuserdata/`
-- Committed Phase 2–4 sources, plugin, generator, specs, example app
+- Committed: `SwiftBeansIOSExample` → `SwiftBeansExample`; native macOS + iOS; docs/specs/memory
 
 ## Next steps
 
 1. Optional: push `main` when ready
-2. Pick next feature / polish (docs, README usage, further examples)
+2. Docs / README usage polish for compile-time DI

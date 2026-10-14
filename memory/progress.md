@@ -29,16 +29,20 @@
 
 ### Done (continued)
 
-- [x] `Examples/SwiftBeansIOSExample/` builds with `SwiftBeansPlugin` (iPhone 16 / iOS 18.6 sim)
+- [x] `Examples/SwiftBeansExample/` builds with `SwiftBeansPlugin` (iPhone 16 / iOS 18.6 sim)
 
 ### Done (continued)
 
-- [x] Fix example SwiftUI Previews (`NoBuildableEntriesError`): iOS-only scheme, selective `Packages/SwiftBeans` links, Simulator destination
+- [x] Fix example SwiftUI Previews (`NoBuildableEntriesError`): selective `Packages/SwiftBeans` links; later re-enabled My Mac
 - [x] Fix nested singleton registry crash (`_os_unfair_lock_recursive_abort` → create-outside-lock)
 
 ### Done (continued)
 
 - [x] Commit Phase 2–4 + example; ignore nested `.build/` / `DerivedData/`
+
+### Done (continued)
+
+- [x] Example multiplatform (iOS + macOS): My Mac run + Previews; rename to `SwiftBeansExample`
 
 ### Open
 

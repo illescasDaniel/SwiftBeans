@@ -11,13 +11,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		000000000000000000000120 /* SwiftBeansIOSExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftBeansIOSExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000120 /* SwiftBeansExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftBeansExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		000000000000000000000010 /* SwiftBeansIOSExample */ = {
+		000000000000000000000010 /* SwiftBeansExample */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = SwiftBeansIOSExample;
+			path = SwiftBeansExample;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -35,7 +35,7 @@
 		000000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000010 /* SwiftBeansIOSExample */,
+				000000000000000000000010 /* SwiftBeansExample */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,7 +43,7 @@
 		000000000000000000000020 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000120 /* SwiftBeansIOSExample.app */,
+				000000000000000000000120 /* SwiftBeansExample.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -51,9 +51,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		000000000000000100000000 /* SwiftBeansIOSExample */ = {
+		000000000000000100000000 /* SwiftBeansExample */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "SwiftBeansIOSExample" */;
+			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "SwiftBeansExample" */;
 			buildPhases = (
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
@@ -65,14 +65,14 @@
 				65E1D52B307F8D36004D0768 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				000000000000000000000010 /* SwiftBeansIOSExample */,
+				000000000000000000000010 /* SwiftBeansExample */,
 			);
-			name = SwiftBeansIOSExample;
+			name = SwiftBeansExample;
 			packageProductDependencies = (
 				65E1D526307F8D36004D0768 /* SwiftBeans */,
 			);
-			productName = SwiftBeansIOSExample;
-			productReference = 000000000000000000000120 /* SwiftBeansIOSExample.app */;
+			productName = SwiftBeansExample;
+			productReference = 000000000000000000000120 /* SwiftBeansExample.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -90,7 +90,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 000000000000000010000000 /* Build configuration list for PBXProject "SwiftBeansIOSExample" */;
+			buildConfigurationList = 000000000000000010000000 /* Build configuration list for PBXProject "SwiftBeansExample" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -107,7 +107,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				000000000000000100000000 /* SwiftBeansIOSExample */,
+				000000000000000100000000 /* SwiftBeansExample */,
 			);
 		};
 /* End PBXProject section */
@@ -136,7 +136,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		000000000000000011000000 /* Debug configuration for PBXProject "SwiftBeansIOSExample" */ = {
+		000000000000000011000000 /* Debug configuration for PBXProject "SwiftBeansExample" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -202,7 +202,7 @@
 			};
 			name = Debug;
 		};
-		000000000000000012000000 /* Release configuration for PBXProject "SwiftBeansIOSExample" */ = {
+		000000000000000012000000 /* Release configuration for PBXProject "SwiftBeansExample" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -260,7 +260,7 @@
 			};
 			name = Release;
 		};
-		000000000000000111000000 /* Debug configuration for PBXNativeTarget "SwiftBeansIOSExample" */ = {
+		000000000000000111000000 /* Debug configuration for PBXNativeTarget "SwiftBeansExample" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -282,14 +282,22 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = iphoneos;
+				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -300,7 +308,7 @@
 			};
 			name = Debug;
 		};
-		000000000000000112000000 /* Release configuration for PBXNativeTarget "SwiftBeansIOSExample" */ = {
+		000000000000000112000000 /* Release configuration for PBXNativeTarget "SwiftBeansExample" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -322,14 +330,22 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = iphoneos;
+				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -343,19 +359,19 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		000000000000000010000000 /* Build configuration list for PBXProject "SwiftBeansIOSExample" */ = {
+		000000000000000010000000 /* Build configuration list for PBXProject "SwiftBeansExample" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				000000000000000011000000 /* Debug configuration for PBXProject "SwiftBeansIOSExample" */,
-				000000000000000012000000 /* Release configuration for PBXProject "SwiftBeansIOSExample" */,
+				000000000000000011000000 /* Debug configuration for PBXProject "SwiftBeansExample" */,
+				000000000000000012000000 /* Release configuration for PBXProject "SwiftBeansExample" */,
 			);
 			defaultConfigurationName = Release;
 		};
-		000000000000000110000000 /* Build configuration list for PBXNativeTarget "SwiftBeansIOSExample" */ = {
+		000000000000000110000000 /* Build configuration list for PBXNativeTarget "SwiftBeansExample" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				000000000000000111000000 /* Debug configuration for PBXNativeTarget "SwiftBeansIOSExample" */,
-				000000000000000112000000 /* Release configuration for PBXNativeTarget "SwiftBeansIOSExample" */,
+				000000000000000111000000 /* Debug configuration for PBXNativeTarget "SwiftBeansExample" */,
+				000000000000000112000000 /* Release configuration for PBXNativeTarget "SwiftBeansExample" */,
 			);
 			defaultConfigurationName = Release;
 		};

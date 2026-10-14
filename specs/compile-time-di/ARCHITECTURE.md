@@ -196,11 +196,11 @@ Rationale: a library package must work off the main actor and on Linux CI; forci
 | `SwiftBeansMacrosTests` | Expansion + static-`@Bean` diagnostics |
 | Generator unit tests | IR build + cycle/missing/duplicate on in-memory source strings (no full Xcode) |
 
-## Example iOS app (manual integration harness)
+## Example app (manual integration harness)
 
 **When:** After Phase 4 has macros + plugin working in package tests (or when validating Xcode plugin trust / `.swiftbeans.yml` multi-module scan). Not needed for Phase 3.
 
-**Where:** [`Examples/SwiftBeansIOSExample/`](../../Examples/SwiftBeansIOSExample/) — a full Xcode iOS app that depends on this package via a relative local path, attaches `SwiftBeansPlugin` to the app target, and keeps `.swiftbeans.yml` at the example root. Human-owned project files are fine; agents should not invent the `.xcodeproj` unless asked.
+**Where:** [`Examples/SwiftBeansExample/`](../../Examples/SwiftBeansExample/) — a multiplatform Xcode SwiftUI app (iOS + macOS) that depends on this package via a relative local path, attaches `SwiftBeansPlugin` to the app target, and keeps `.swiftbeans.yml` at the example root. Human-owned project files are fine; agents should not invent the `.xcodeproj` unless asked.
 
 ## Out of architecture (still out of SPEC v1)
 
