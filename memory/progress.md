@@ -17,8 +17,30 @@
 
 - [x] Phase 1: Approve `specs/compile-time-di/SPEC.md` (compile-time DI + plugin scan)
 
+### Done (continued)
+
+- [x] Phase 2: Approve architecture (`specs/compile-time-di/ARCHITECTURE.md`)
+- [x] Phase 2 contracts: `BeanScope` / `SwiftBeansScanConfiguration`
+
+### Done (continued)
+
+- [x] Phase 3: BDD-mapped tests + `SwiftBeansGeneratorCore`
+- [x] Phase 4: Macros + parser + codegen + generator CLI + `SwiftBeansPlugin` (`swift test` green)
+
+### Done (continued)
+
+- [x] `Examples/SwiftBeansIOSExample/` builds with `SwiftBeansPlugin` (iPhone 16 / iOS 18.6 sim)
+
+### Done (continued)
+
+- [x] Fix example SwiftUI Previews (`NoBuildableEntriesError`): iOS-only scheme, selective `Packages/SwiftBeans` links, Simulator destination
+- [x] Fix nested singleton registry crash (`_os_unfair_lock_recursive_abort` → create-outside-lock)
+
+### Done (continued)
+
+- [x] Commit Phase 2–4 + example; ignore nested `.build/` / `DerivedData/`
+
 ### Open
 
-- [ ] Phase 2: Architecture contracts (macros vs plugin vs public API)
-- [ ] Phase 3: BDD tests for compile-time DI
-- [ ] Phase 4: Implement macros + generator + build plugin
+- [ ] Push `main` when ready (optional)
+- [ ] Docs / README usage polish for compile-time DI

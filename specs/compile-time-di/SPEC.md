@@ -233,4 +233,4 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 
 ## Phase gate
 
-Phase 1 approved 2026-10-14. Proceed to Phase 2 (architecture / contracts); stop again for human approval before Phase 3.
+Phase 1–2 approved 2026-10-14. Phase 3–4 implemented in package tests. Pending Xcode E2E via `Examples/SwiftBeansIOSExample/`.

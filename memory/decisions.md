@@ -1,5 +1,66 @@
 # Decisions
 
+## 2026-10-14 — Registry create-outside-lock for nested singletons
+
+**Context:** Launching the MVVM example crashed with `_os_unfair_lock_recursive_abort` in `SwiftBeansRegistry.singleton`: resolving `fetchItemsUseCase` held `Mutex` while its factory resolved `itemRepository`, which locked again.
+
+**Decision:** Implement double-checked locking with `NSLock`: look up under lock, run `create` unlocked, store under lock (prefer the winner if two threads race). Drop `Mutex` for this API because Swift 6 region isolation rejects returning a value created outside `withLock`.
+
+**Rationale:** Constructor-injected singleton graphs always nest registry calls; non-recursive locks require unlocked factories. Cycles remain a compile-time validator concern.
+
+## 2026-10-14 — Example Previews: iOS scheme + non-nested Packages/SwiftBeans
+
+**Context:** Previews failed with `NoBuildableEntriesError` / empty `buildableEntries` while target containment still listed `ItemListView.swift`. Diagnostics showed destination **My Mac**; the example was also multiplatform (`macosx` in `SUPPORTED_PLATFORMS`). A repo-root `Packages/SwiftBeans` symlink nested `Examples/` under the package path. Having the repo-root Swift package window open alongside the example `.xcodeproj` also blocked Previews.
+
+**Decision:** (1) Shared `SwiftBeansIOSExample` scheme; target iOS-only (`iphoneos` / `iphonesimulator`). (2) `Packages/SwiftBeans` is a directory of symlinks to `Package.swift` / `Sources` / `Plugins` / `Tests` only (not the whole repo). (3) Open the example project alone for Previews; use an iOS Simulator destination.
+
+**Rationale:** Xcode package resolution still likes the named local folder; avoiding the Examples nest + My Mac + dual-workspace ambiguity made `#Preview` render successfully.
+
+## 2026-10-14 — Example local package via Packages/SwiftBeans symlink
+
+**Context:** Xcode reported `Missing package product 'SwiftBeans'` with `XCLocalSwiftPackageReference` `relativePath = ../..` even though `xcodebuild` often resolved it.
+
+**Decision:** Point the example at `Packages/SwiftBeans` (symlink to the repo root) and set `package =` on each `XCSwiftPackageProductDependency`.
+
+**Rationale:** Matches GamesLibrary-style named local package folders; Xcode build via MCP succeeded afterward. Superseded the same day by selective symlinks (see above) after Previews broke.
+
+## 2026-10-14 — Example E2E: plugin pbxproj + registry visibility
+
+**Context:** Xcode “Run Build Tool Plug-ins” UI is easy to miss; first example build failed on `fileprivate` registry and missing `Foundation` in generated code.
+
+**Decision:** Attach plugins in `project.pbxproj` as `XCSwiftPackageProductDependency` with `productName = "plugin:SwiftBeansPlugin"` plus a `PBXTargetDependency`. Registry property is **internal** (not `fileprivate`) so generated extensions compile. Generated file imports `Foundation`.
+
+**Rationale:** Matches what Xcode writes; verified with iOS Simulator build of `Examples/SwiftBeansIOSExample`.
+
+## 2026-10-14 — Phase 4: registry storage + Mutex platforms
+
+**Context:** Generated extensions cannot add stored properties; per-bean `Mutex` fields need somewhere to live.
+
+**Decision:** `@ApplicationContext` member macro adds `_swiftBeansRegistry: SwiftBeansRegistry`; codegen uses `singleton(key:create:)` for `.singleton` and inline construction for `.transient`. Package platforms set to macOS 15 / iOS 18+ for Synchronization `Mutex`. Accessor names use acronym-aware lowercasing (`URLSession` → `urlSession`).
+
+**Rationale:** One storage property keeps generation simple and concurrency-safe without associated objects.
+
+## 2026-10-14 — GeneratorCore library for Phase 3 tests
+
+**Context:** BDD scenarios need a compilable API before macros/plugin exist; IR validation is pure and testable without parsing.
+
+**Decision:** Add `SwiftBeansGeneratorCore` with `BeanGraphValidator` (implemented) and `BeanSourceParser` (stub `notImplemented`). Runtime accessor scenarios are `@Test(.disabled)` until Phase 4 codegen. Example iOS app lives under `Examples/SwiftBeansIOSExample/` after Phase 4, human-owned.
+
+**Rationale:** Unblocks Phase 3 SDD gate while keeping discovery/codegen for Phase 4.
+
+## 2026-10-14 — Phase 2 architecture seams (`compile-time-di`)
+
+**Context:** Need clear ownership between macros, generator, and plugin; concurrency and YAML filename were still open in the SPEC.
+
+**Decision:**
+- Discovery and graph validation live in **SwiftBeansGenerator** (invoked by **SwiftBeansPlugin**); macros are attribute API + local diagnostics only.
+- Scan config file name: **`.swiftbeans.yml`**; schema type `SwiftBeansScanConfiguration` with `local_packages`.
+- Concurrency: no forced `@MainActor` on contexts; singleton slots use **`Mutex`**; prefer `final class` contexts.
+- v1: exactly one `@ApplicationContext` per scanned graph; injectable key = provided type name (no qualifiers).
+- Details: `specs/compile-time-di/ARCHITECTURE.md`.
+
+**Rationale:** Matches Swift macro limits, supports Linux/CI and non-UI packages, and mirrors Pin/Sword split (macro surface vs build-time scan).
+
 ## 2026-10-14 — SPEC open questions resolved (`compile-time-di`)
 
 **Context:** Phase 1 draft left root name, `@Service` shape, multi-module scan, and `@Bean` static vs instance open.

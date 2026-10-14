@@ -1,0 +1,2 @@
+# Optional multi-module scan list (empty for this single-target example).
+local_packages: []

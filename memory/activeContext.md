@@ -4,24 +4,18 @@ _Last updated: 2026-10-14_
 
 ## Branch
 
-- `main`
+- `main` (Phase 2–4 + MVVM example committed)
 
 ## Current focus
 
-Phase 1 SPEC approved. Ready for Phase 2 (architecture / contracts). No implementation code yet.
+None — compile-time DI + iOS example are on `main`.
 
 ## Just changed
 
-- Approved [`specs/compile-time-di/SPEC.md`](../specs/compile-time-di/SPEC.md)
-- Root = `@ApplicationContext`; `@Service` attribute-only; YAML multi-module scan; static `@Bean`
-- Committing tooling + SPEC before Phase 2
-
-## Blockers
-
-- None
+- `.gitignore`: `.build/` (any depth) + `.swiftpm/.../xcuserdata/`
+- Committed Phase 2–4 sources, plugin, generator, specs, example app
 
 ## Next steps
 
-1. Phase 2 — Architecture: public contracts + macro vs plugin module seams; stop for approval
-2. Phase 3 — Tests from BDD scenarios
-3. Phase 4 — Implement macros + generator + plugin until `swift test` is green
+1. Optional: push `main` when ready
+2. Pick next feature / polish (docs, README usage, further examples)
