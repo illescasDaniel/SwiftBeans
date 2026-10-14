@@ -1,6 +1,15 @@
 {
-  "originHash" : "d0602f108542500d7ba655b4f04bd0c0454fa0837ca873d8a32b9d4f4bbf8f05",
+  "originHash" : "c062d62addc520c3c6af8ae8c9c767dc3f04cb6af5b7cfd56a7b979555bdd36d",
   "pins" : [
+    {
+      "identity" : "htties",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/illescasDaniel/HTTIES",
+      "state" : {
+        "revision" : "a79134436200d0168944fe1e395861a9f22869c2",
+        "version" : "2.0.2"
+      }
+    },
     {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",

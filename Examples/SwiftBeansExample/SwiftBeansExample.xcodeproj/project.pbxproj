@@ -8,16 +8,33 @@
 
 /* Begin PBXBuildFile section */
 		65E1D527307F8D36004D0768 /* SwiftBeans in Frameworks */ = {isa = PBXBuildFile; productRef = 65E1D526307F8D36004D0768 /* SwiftBeans */; };
+		A1HTTP010000000000000001 /* HTTIES in Frameworks */ = {isa = PBXBuildFile; productRef = A1HTTP020000000000000001 /* HTTIES */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1TDEP010000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = SwiftBeansExample;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* SwiftBeansExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftBeansExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1PROD010000000000000001 /* SwiftBeansExampleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwiftBeansExampleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* SwiftBeansExample */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SwiftBeansExample;
+			sourceTree = "<group>";
+		};
+		A1SYNC010000000000000001 /* SwiftBeansExampleTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SwiftBeansExampleTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -27,6 +44,12 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				65E1D527307F8D36004D0768 /* SwiftBeans in Frameworks */,
+				A1HTTP010000000000000001 /* HTTIES in Frameworks */,
+			);
+		};
+		A1FRAM010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -36,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* SwiftBeansExample */,
+				A1SYNC010000000000000001 /* SwiftBeansExampleTests */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -44,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* SwiftBeansExample.app */,
+				A1PROD010000000000000001 /* SwiftBeansExampleTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,10 +95,32 @@
 			name = SwiftBeansExample;
 			packageProductDependencies = (
 				65E1D526307F8D36004D0768 /* SwiftBeans */,
+				A1HTTP020000000000000001 /* HTTIES */,
 			);
 			productName = SwiftBeansExample;
 			productReference = 000000000000000000000120 /* SwiftBeansExample.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1TARG010000000000000001 /* SwiftBeansExampleTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1CFGL010000000000000001 /* Build configuration list for PBXNativeTarget "SwiftBeansExampleTests" */;
+			buildPhases = (
+				A1SRCS010000000000000001 /* Sources */,
+				A1FRAM010000000000000001 /* Frameworks */,
+				A1RSRC010000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1TDEP020000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1SYNC010000000000000001 /* SwiftBeansExampleTests */,
+			);
+			name = SwiftBeansExampleTests;
+			productName = SwiftBeansExampleTests;
+			productReference = A1PROD010000000000000001 /* SwiftBeansExampleTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -88,6 +135,10 @@
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
 					};
+					A1TARG010000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 000000000000000100000000;
+					};
 				};
 			};
 			buildConfigurationList = 000000000000000010000000 /* Build configuration list for PBXProject "SwiftBeansExample" */;
@@ -101,6 +152,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				65E1D525307F8D36004D0768 /* XCLocalSwiftPackageReference "Packages/SwiftBeans" */,
+				A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
@@ -108,12 +160,18 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* SwiftBeansExample */,
+				A1TARG010000000000000001 /* SwiftBeansExampleTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		A1RSRC010000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -126,12 +184,22 @@
 			files = (
 			);
 		};
+		A1SRCS010000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		65E1D52B307F8D36004D0768 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			productRef = 65E1D52A307F8D36004D0768 /* SwiftBeansPlugin */;
+		};
+		A1TDEP020000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* SwiftBeansExample */;
+			targetProxy = A1TDEP010000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -356,6 +424,56 @@
 			};
 			name = Release;
 		};
+		A1BCFG010000000000000001 /* Debug configuration for PBXNativeTarget "SwiftBeansExampleTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).SwiftBeansExampleTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftBeansExample.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwiftBeansExample";
+			};
+			name = Debug;
+		};
+		A1BCFG020000000000000001 /* Release configuration for PBXNativeTarget "SwiftBeansExampleTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).SwiftBeansExampleTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftBeansExample.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwiftBeansExample";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -375,6 +493,14 @@
 			);
 			defaultConfigurationName = Release;
 		};
+		A1CFGL010000000000000001 /* Build configuration list for PBXNativeTarget "SwiftBeansExampleTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1BCFG010000000000000001 /* Debug configuration for PBXNativeTarget "SwiftBeansExampleTests" */,
+				A1BCFG020000000000000001 /* Release configuration for PBXNativeTarget "SwiftBeansExampleTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -383,6 +509,17 @@
 			relativePath = Packages/SwiftBeans;
 		};
 /* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/illescasDaniel/HTTIES";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		65E1D526307F8D36004D0768 /* SwiftBeans */ = {
@@ -394,6 +531,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 65E1D525307F8D36004D0768 /* XCLocalSwiftPackageReference "Packages/SwiftBeans" */;
 			productName = "plugin:SwiftBeansPlugin";
+		};
+		A1HTTP020000000000000001 /* HTTIES */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */;
+			productName = HTTIES;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

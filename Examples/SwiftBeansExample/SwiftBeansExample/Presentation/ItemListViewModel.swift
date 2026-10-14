@@ -23,6 +23,6 @@ final class ItemListViewModel {
 		statusText = "Loading…"
 		items = await fetchItems.execute()
 		isLoading = false
-		statusText = "\(items.count) items from FakeItemRepository → UseCase → ViewModel"
+		statusText = "\(items.count) posts · HTTIES → Repository → UseCase → ViewModel"
 	}
 }

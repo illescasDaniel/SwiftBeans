@@ -34,6 +34,39 @@ public enum BeanSourceParser {
 		return try BeanGraphValidator.validate(providers: providers, contextTypeName: contexts[0])
 	}
 
+	/// Module names imported by the scanned sources (for generated-file visibility).
+	///
+	/// Skips modules the generator always emits (`Foundation`, `SwiftBeans`) and common
+	/// test / UI modules that are not needed by accessors.
+	public static func collectAdditionalImports(fromSources sources: [String]) -> [String] {
+		let skipped: Set<String> = [
+			"Foundation",
+			"SwiftBeans",
+			"Swift",
+			"Testing",
+			"XCTest",
+			"SwiftUI",
+			"Observation",
+			"AppKit",
+			"UIKit",
+		]
+		var modules = Set<String>()
+		for source in sources {
+			let tree = Parser.parse(source: source)
+			for statement in tree.statements {
+				guard let importDecl = statement.item.as(ImportDeclSyntax.self) else {
+					continue
+				}
+				let name = importDecl.path.map(\.name.text).joined(separator: ".")
+				guard !name.isEmpty, !skipped.contains(name) else {
+					continue
+				}
+				modules.insert(name)
+			}
+		}
+		return modules.sorted()
+	}
+
 	// MARK: - Walk
 
 	private static func collectApplicationContexts(in tree: SourceFileSyntax) -> [String] {

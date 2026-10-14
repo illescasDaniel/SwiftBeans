@@ -68,4 +68,74 @@ struct BeanSourceParserTests {
 		#expect(providers[0].key.typeName == "APIClient")
 		#expect(providers[0].sourceName == "DefaultAPIClient")
 	}
+
+	@Test
+	func `Given transient service and bean When parsed Then scopes are preserved`() throws {
+		let sources = [
+			"""
+			@Configuration
+			enum AppConfiguration {
+				@Bean(scope: .transient)
+				static func requestProbe() -> RequestProbe { RequestProbe() }
+			}
+
+			@Service(scope: .transient)
+			final class ItemListViewModel {
+				init(probe: RequestProbe) {}
+			}
+
+			@ApplicationContext
+			final class AppContext {}
+			""",
+		]
+		let providers = try BeanSourceParser.parseProviders(fromSources: sources)
+		let probe = providers.first { $0.key.typeName == "RequestProbe" }
+		let viewModel = providers.first { $0.key.typeName == "ItemListViewModel" }
+		#expect(probe?.scope == .transient)
+		#expect(viewModel?.scope == .transient)
+		#expect(viewModel?.dependencies.map(\.typeName) == ["RequestProbe"])
+	}
+
+	@Test
+	func `Given sources importing HTTIES When collecting imports Then HTTIES is listed`() {
+		let sources = [
+			"""
+			import Foundation
+			import HTTIES
+			import SwiftBeans
+
+			@Configuration
+			enum AppConfiguration {
+				@Bean
+				static func httpClient() -> any HTTPClient { fatalError() }
+			}
+			""",
+		]
+		let imports = BeanSourceParser.collectAdditionalImports(fromSources: sources)
+		#expect(imports == ["HTTIES"])
+	}
+
+	@Test
+	func `Given bean with dependency When parsed Then dependency is recorded`() throws {
+		let sources = [
+			"""
+			@Configuration
+			enum AppConfiguration {
+				@Bean
+				static func clock() -> AppClock { AppClock() }
+
+				@Bean
+				static func analytics(clock: AppClock) -> AnalyticsService {
+					AnalyticsService(clock: clock)
+				}
+			}
+
+			@ApplicationContext
+			final class AppContext {}
+			""",
+		]
+		let providers = try BeanSourceParser.parseProviders(fromSources: sources)
+		let analytics = providers.first { $0.key.typeName == "AnalyticsService" }
+		#expect(analytics?.dependencies.map(\.typeName) == ["AppClock"])
+	}
 }

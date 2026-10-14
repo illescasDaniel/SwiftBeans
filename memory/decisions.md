@@ -1,5 +1,37 @@
 # Decisions
 
+## 2026-10-14 — Generated `{Context}Protocol` + user-owned fakes
+
+**Context:** The example hand-maintained `AppContaining` mirroring generated accessors so navigation/tests could inject stubs. Previews also needed mock graphs without production `AppContext`.
+
+**Decision:** Generator emits `{ContextTypeName}Protocol` (e.g. `AppContextProtocol`) with one `{ get }` per injectable key, plus `extension AppContext: AppContextProtocol {}`. Apps hand-write fakes (`FakeAppContext`); SwiftBeans does not generate mock implementations. Example deleted `AppContaining` and uses `any AppContextProtocol` in the coordinator / Previews / tests.
+
+**Rationale:** The protocol is derived from the same graph as accessors, so it cannot drift. Fake wiring is app-specific (HTTIES fakes, stub repos) and belongs outside the library.
+
+## 2026-10-14 — Example HTTIES from public SPM (not local clone)
+
+**Context:** The example initially linked HTTIES via `Packages/HTTIES` symlinks to a sibling checkout, which forced anyone opening the example to also clone HTTIES.
+
+**Decision:** Use `XCRemoteSwiftPackageReference` to `https://github.com/illescasDaniel/HTTIES` (`upToNextMajorVersion` from 2.0.2). Keep only `Packages/SwiftBeans` as a local symlink for in-repo development of this library.
+
+**Rationale:** Consumers of the example only need the SwiftBeans repo; HTTIES resolves from GitHub like any normal dependency.
+
+## 2026-10-14 — HTTIES via @Bean + generator existential/import fixes
+
+**Context:** The example’s clearest `@Configuration`/`@Bean` story is wiring a foreign HTTP stack (HTTIES + `URLSession` / fake handler) to JSONPlaceholder — not toy types like `AppClock`. Returning `any HTTPClient` broke codegen (`var any HTTPClient`) and the generated file lacked `import HTTIES` under member-import visibility.
+
+**Decision:** (1) Example beans: `httpDataRequestHandler` → `FakeJSONPlaceholderDataHandler` by default (swap to `URLSession.shared` for live API), `httpClient` → `HTTPClientImpl`. (2) `Naming.accessorName` strips `any`/`some` prefixes. (3) Generator collects non-skipped imports from scanned sources and emits them in `SwiftBeansGenerated.swift`.
+
+**Rationale:** `@Bean` exists for types you don’t own; HTTIES makes that obvious. Fake handler keeps CI/Previews offline while one-line swap demonstrates live JSONPlaceholder.
+
+## 2026-10-14 — Example coordinator navigation + AppContaining seam
+
+**Context:** The MVVM example needed more screens and a place to exercise every v1 SwiftBeans feature (`@Configuration`/`@Bean`, singleton vs transient, protocol binding). GamesLibrary already used `AppCoordinator` + `NavigationPath` + an `AppContaining` protocol for testable navigation.
+
+**Decision:** Mirror that pattern in `SwiftBeansExample`: `AppCoordinator` builds routes from `any AppContaining`; production `AppContext` conforms via generated accessors; tests use a stub container. Add `ItemDetail` and `FeaturesDemo` screens; provide `AppClock` / `RequestProbe` via `@Configuration` beans. Host-app unit tests cover use cases, view models, coordinator, and live `AppContext` scope/protocol behavior.
+
+**Rationale:** Keeps navigation out of views, demonstrates compile-time DI end-to-end, and lets tests construct services manually (SPEC “plain types stay plain”) while still integration-testing the generated graph.
+
 ## 2026-10-14 — Example multiplatform (iOS + macOS) + rename
 
 **Context:** `SwiftBeansExample` (formerly `SwiftBeansIOSExample`) was locked to iOS-only after Previews failed on **My Mac** (`NoBuildableEntriesError`). That failure was later traced mainly to nesting `Examples/` under a whole-repo `Packages/SwiftBeans` symlink and dual open workspaces, not to macOS support itself.

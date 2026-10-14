@@ -6,30 +6,36 @@ Path: `Examples/SwiftBeansExample/`
 
 Multiplatform SwiftUI app (iOS + macOS) wired for local development:
 
-- Local package: `Packages/SwiftBeans/` — directory of symlinks to repo `Package.swift` / `Sources` / `Plugins` / `Tests` (not a single symlink to the repo root, which nested `Examples` under the package path)
-- Product: `SwiftBeans`
-- Build tool plugin: `SwiftBeansPlugin` (via `productName = "plugin:SwiftBeansPlugin"` in the pbxproj)
-- Shared scheme: `SwiftBeansExample` (supports **My Mac** and iOS Simulator)
-- `.swiftbeans.yml` at the example root
-- MVVM demo (see `SwiftBeansExample/`):
+- Local package: `Packages/SwiftBeans/` — symlinks to this repo’s `Package.swift` / `Sources` / `Plugins` / `Tests`
+- Remote package: [HTTIES](https://github.com/illescasDaniel/HTTIES) (JSON HTTP client)
+- Build tool plugin: `SwiftBeansPlugin`
+- Shared scheme: `SwiftBeansExample` (My Mac + iOS Simulator)
+- Unit tests: `SwiftBeansExampleTests`
+- Coordinator navigation + MVVM over JSONPlaceholder posts:
 
 ```text
 MyApp
-  └─ ItemListView(viewModel: context.itemListViewModel)
-       └─ ItemListViewModel          @Service(scope: .transient)
-            └─ FetchItemsUseCase     @Service
-                 └─ ItemRepository   protocol
-                      └─ FakeItemRepository   @Service(boundTo: ItemRepository.self)
+  └─ AppRootView(coordinator)
+       └─ NavigationStack
+            ├─ ItemListView (posts)
+            ├─ ItemDetailView
+            └─ FeaturesDemoView  ← why @Bean exists (HTTIES)
+
+@Configuration AppConfiguration
+  @Bean httpDataRequestHandler() → FakeJSONPlaceholderDataHandler
+       └─ swap to URLSession.shared for live API
+  @Bean httpClient(handler:) → HTTPClientImpl (HTTIES)
+
+@Service(boundTo: ItemRepository.self) JSONPlaceholderItemRepository
+@Service FetchItemsUseCase
+@Service(scope: .transient) view models
 ```
 
-If Xcode still shows **Missing package product 'SwiftBeans'**: close the project, reopen `Examples/SwiftBeansExample/SwiftBeansExample.xcodeproj` (not the repo-root `Package.swift`), then **File → Packages → Reset Package Caches** and build again.
+**SwiftUI Previews:** open only the example `.xcodeproj`, scheme `SwiftBeansExample`, My Mac or iPhone Simulator.
 
-**SwiftUI Previews:** open only the example `.xcodeproj` (close the repo-root Swift package window if open), select scheme `SwiftBeansExample`, then **My Mac** or an iPhone Simulator.
-
-### Build (CLI)
+### Build / test (CLI)
 
 ```bash
-# macOS
 xcodebuild \
   -project Examples/SwiftBeansExample/SwiftBeansExample.xcodeproj \
   -scheme SwiftBeansExample \
@@ -37,13 +43,11 @@ xcodebuild \
   -derivedDataPath DerivedData/SwiftBeansExample \
   build
 
-# iOS Simulator
-xcodebuild \
+xcodebuild test \
   -project Examples/SwiftBeansExample/SwiftBeansExample.xcodeproj \
   -scheme SwiftBeansExample \
-  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' \
-  -derivedDataPath DerivedData/SwiftBeansExample \
-  build
+  -destination 'platform=macOS' \
+  -derivedDataPath DerivedData/SwiftBeansExample
 ```
 
-Requires **macOS 15+** / **iOS 18+**.
+Requires **macOS 15+** / **iOS 18+**. HTTIES resolves from GitHub via SwiftPM (no local clone needed).

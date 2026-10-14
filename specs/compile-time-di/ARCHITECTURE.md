@@ -48,6 +48,7 @@ Consumers depend on product `SwiftBeans` and attach plugin `SwiftBeansPlugin` to
 | Discover all `@Service` / `@Bean` / `@Configuration` / `@ApplicationContext` across files & YAML packages | **Generator** | Macros cannot see other files |
 | Missing / duplicate / cycle checks | **Generator** | Needs full graph IR |
 | Emit accessors + singleton storage on the context type | **Generator** → `SwiftBeansGenerated.swift` | Cross-cutting; written as a normal `extension` on the user’s context type |
+| Emit `{ContextTypeName}Protocol` + `extension Context: Protocol` | **Generator** → same file | Testable / Preview seam; same getters as accessors; fakes are user-owned |
 | Optional peer helpers on a single type | Macros | Keep expansions small; prefer generator for graph output |
 
 Macros are **not** the discovery engine. They are the public attribute API plus local checks. The generator is the Spring “component scan.”

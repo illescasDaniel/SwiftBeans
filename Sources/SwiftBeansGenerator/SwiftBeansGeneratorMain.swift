@@ -72,7 +72,11 @@ struct SwiftBeansGeneratorMain {
 
 		do {
 			let graph = try BeanSourceParser.buildGraph(fromSources: sources)
-			let generated = try BeanCodeGenerator.generate(graph: graph)
+			let additionalImports = BeanSourceParser.collectAdditionalImports(fromSources: sources)
+			let generated = try BeanCodeGenerator.generate(
+				graph: graph,
+				additionalImports: additionalImports
+			)
 			try generated.write(to: URL(fileURLWithPath: outputPath), atomically: true, encoding: .utf8)
 		} catch {
 			fputs("error: \(error)\n", stderr)

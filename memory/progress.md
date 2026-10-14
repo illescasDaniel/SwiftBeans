@@ -44,7 +44,17 @@
 
 - [x] Example multiplatform (iOS + macOS): My Mac run + Previews; rename to `SwiftBeansExample`
 
+### Done (continued)
+
+- [x] Example: coordinator navigation + full DI feature demo (`@Configuration`/`@Bean`, scopes, protocol bind)
+- [x] Example unit tests (`SwiftBeansExampleTests`) + package test coverage gaps filled (`swift test` / example `xcodebuild test` green)
+- [x] Example: HTTIES + JSONPlaceholder (fake handler / live `URLSession`) via `@Bean`; generator fixes for `any` accessors + imports
+
+### Done (continued)
+
+- [x] Generate `{Context}Protocol` (e.g. `AppContextProtocol`) + example `FakeAppContext` / Previews / tests
+
 ### Open
 
 - [ ] Push `main` when ready (optional)
-- [ ] Docs / README usage polish for compile-time DI
+- [ ] Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / FakeAppContext pattern)

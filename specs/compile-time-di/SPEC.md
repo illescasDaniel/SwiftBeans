@@ -51,6 +51,25 @@ let users: UserService = app.userService
 
 Consuming code obtains dependencies from the root (or a later child scope), not via a global service locator.
 
+### Generated context protocol: `{ContextTypeName}Protocol`
+
+For each `@ApplicationContext` type (e.g. `AppContext`), the generator also emits a protocol named **`{ContextTypeName}Protocol`** (e.g. `AppContextProtocol`) with a read-only getter per injectable key — same names and types as the concrete accessors — plus `extension AppContext: AppContextProtocol {}`.
+
+```swift
+// Generated
+protocol AppContextProtocol: AnyObject {
+	var userService: UserService { get }
+}
+
+extension AppContext {
+	var userService: UserService { ... }
+}
+
+extension AppContext: AppContextProtocol {}
+```
+
+Apps type navigation / SwiftUI seams against `any AppContextProtocol` and hand-write fakes (e.g. `FakeAppContext`) for Previews and tests. **Generating fake / mock context implementations is out of scope.**
+
 ### Stereotypes & factories
 
 `@Service` is **attribute-only for the scanner** in v1: it does not require or synthesize a protocol conformance marker.
@@ -203,6 +222,15 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 **When** the app builds  
 **Then** that `@Service` is part of the graph and resolvable from the root
 
+### Scenario: Generated context protocol
+
+**Given** an `@ApplicationContext` type named `AppContext`  
+**And** the scanned graph provides injectable keys (e.g. `UserService`, `any HTTPClient`)  
+**When** the target builds  
+**Then** the generated file declares `protocol AppContextProtocol: AnyObject` with a getter per key  
+**And** declares `extension AppContext: AppContextProtocol`  
+**And** a hand-written type may conform to `AppContextProtocol` without using the generated accessors
+
 ## Out of scope (v1)
 
 - Runtime service-locator / `resolve(Type.self)` dictionary container (distinct from the `@ApplicationContext` **attribute**)
@@ -216,6 +244,7 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - Assisted injection / subcontexts (candidate for v1.1)
 - Circular dependencies broken via lazy/`ObjectFactory` (fail instead)
 - Drop-in compatibility with Sword, Pin, Needle, Swinject, or Factory
+- Generating fake / mock `@ApplicationContext` implementations (apps hand-write fakes against `{Context}Protocol`)
 
 ## Fallback policy
 
@@ -230,7 +259,10 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Multi-module scan | YAML config (supports Xcode apps without `Package.swift`) |
 | `@Bean` methods | Must be `static` |
 | Named qualifiers | Deferred (no v1 BDD requirement) |
+| Context protocol name | `{ContextTypeName}Protocol` (e.g. `AppContextProtocol`); fakes are user-owned |
 
 ## Phase gate
 
-Phase 1–2 approved 2026-10-14. Phase 3–4 implemented in package tests. Pending Xcode E2E via `Examples/SwiftBeansExample/`.
+Phase 1–2 approved 2026-10-14. Phase 3–4 implemented in package tests. Xcode E2E via `Examples/SwiftBeansExample/` (coordinator demo + `SwiftBeansExampleTests`) green on macOS 2026-10-14.
+
+`{Context}Protocol` generation: Phase 1 approved with plan 2026-10-14; Phase 3–4 follow in package tests + example `FakeAppContext` / Previews.

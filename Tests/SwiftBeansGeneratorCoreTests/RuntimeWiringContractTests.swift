@@ -51,4 +51,24 @@ struct RuntimeWiringContractTests {
 		let service = UserService(name: "manual")
 		#expect(service.name == "manual")
 	}
+
+	@Test
+	func `Given concurrent singleton resolves When raced Then all callers share one instance`() async {
+		let registry = SwiftBeansRegistry()
+		let results = await withTaskGroup(of: Token.self, returning: [Token].self) { group in
+			for _ in 0..<32 {
+				group.addTask {
+					registry.singleton(key: "Token") { Token() }
+				}
+			}
+			var tokens: [Token] = []
+			for await token in group {
+				tokens.append(token)
+			}
+			return tokens
+		}
+		let first = results[0]
+		#expect(results.count == 32)
+		#expect(results.allSatisfy { $0 === first })
+	}
 }

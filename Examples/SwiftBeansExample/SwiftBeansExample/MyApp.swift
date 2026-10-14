@@ -2,13 +2,16 @@ import SwiftUI
 
 @main
 struct MyApp: App {
-	/// Single graph root for the app process.
-	private let context = AppContext()
+	@State private var coordinator: AppCoordinator
+
+	init() {
+		let context = AppContext()
+		_coordinator = State(initialValue: AppCoordinator(container: context))
+	}
 
 	var body: some Scene {
 		WindowGroup {
-			// View ← ViewModel (from DI). ViewModel ← UseCase ← Repository.
-			ItemListView(viewModel: context.itemListViewModel)
+			AppRootView(coordinator: coordinator)
 		}
 	}
 }
