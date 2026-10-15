@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Inter-bean direct calls: warning, not error, no runtime change
+
+**Context:** Spring proxies `@Configuration` so inter-bean calls return the shared singleton; SwiftBeans `@Bean`s are static, so `Config.otherBean()` inside a `@Bean` silently builds a second instance.
+
+**Decision:** Add a generator-only warning `bean.directCall` (`DirectCallAnalyzer`, after scan/resolve) for calls to a known `@Bean` from `@Bean` bodies and `@Service` initializer bodies (`Type.bean()`, `Self.bean()`, bare `bean()`), with a note at the callee. Matches by base name and type spelling; ambiguous or self calls are skipped. Severity is a warning. Proxies, instance `@Bean`, and macro rewriting stay out of scope (options recorded in the SPEC).
+
+**Rationale:** Cheapest useful step with no change to generated output or public API. A warning avoids breaking builds on false positives of a spelling-based match (typealiases, local shadowing) until there is data to justify an error.
+
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 
 **Context:** First public release of the package on GitHub (`illescasDaniel/SwiftBeans`).

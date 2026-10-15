@@ -4,20 +4,22 @@ _Last updated: 2026-10-15_
 
 ## Branch
 
-- `main`
+- `cursor/inter-bean-call-diagnostic-53df` (from `main` @ 6b04703)
 
 ## Current focus
 
-Review backlog cleared (2026-10-15): example-app fixes, product surface (`SwiftBeansGeneratorCore` no longer a product, `package` access), README written, `.claude` symlinks to `.cursor` skills/rules. All uncommitted; `@Assisted` is committed (`25e0b04`). Verified: `swift test` 133, example macOS tests, iOS Simulator and Release builds.
+Inter-bean call diagnostic (cheap first step of the Spring-style inter-bean calls backlog item). Implemented and tested: `bean.directCall` warning.
 
 ## Just changed
 
-- Example: Swift 6 mode, `@State` view models, `LoadState`, throwing `ItemRepository`, `#if DEBUG` fakes and Previews, Release `URLSession.shared`
-- `Package.swift`: products are only `SwiftBeans` + `SwiftBeansPlugin`
-- `README.md` (new)
+- `specs/inter-bean-call-diagnostic/SPEC.md` (new; includes Spring investigation findings + future options)
+- `Sources/SwiftBeansGeneratorCore/DirectCallAnalyzer.swift` (new); `DeclarationScanner` records call sites in `@Bean` and initializer bodies; `SwiftBeansGeneration` runs the analyzer
+- `Tests/SwiftBeansGeneratorCoreTests/GeneratorDirectCallTests.swift` (15 tests)
+- `SwiftBeansGeneratorMain`: `stderr` via `FileHandle` (Linux Swift 6); `GeneratedFileWriterTests` tolerant date compare (Linux)
+- `swift test`: 148 tests green on Linux
 
 ## Next steps
 
-1. Commit this batch when asked
-2. Spec assisted-factory injection (`(Item) -> ItemDetailViewModel`) — Phase 1
-3. Optional: push `main`
+1. Review/open PR for this branch (not opened by the agent)
+2. Optional: verify the warning surfaces in Xcode/SwiftPM plugin output on macOS with the example app
+3. Remaining backlog: proxies / instance `@Bean` / macro rewriting (see SPEC Future work)

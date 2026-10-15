@@ -77,6 +77,10 @@
 - [x] README with installation, concepts, scopes, `@Inject`, `@Assisted`, `{Context}Protocol` fakes, `.swiftbeans.yml`, rules (2026-10-15)
 - [x] `.claude/skills` and `.claude/rules/*.md` symlinked to `.cursor/` (2026-10-15)
 
+### Done (continued)
+
+- [x] Inter-bean call diagnostic slice (branch `cursor/inter-bean-call-diagnostic-53df`): `specs/inter-bean-call-diagnostic/SPEC.md`, `DirectCallAnalyzer`, `bean.directCall` warning, `GeneratorDirectCallTests` (15); generator `stderr` fixed for Linux; `GeneratedFileWriterTests` date comparison made tolerant on Linux
+
 ### Open
 
 - [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
@@ -100,7 +104,7 @@ Suggested order: CI first, then factory injection, then qualifiers.
 - [ ] Graph dump: plugin emits a Markdown/DOT file of the resolved graph for debugging and onboarding
 - [ ] Fix known limitation: a new file in a local package may need a clean build before it joins the graph
 - [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)
-- [ ] Investigate Spring-style inter-bean calls (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
+- [ ] Investigate Spring-style inter-bean calls (diagnostic slice done, see Done; remaining: proxies / instance `@Bean` / macro rewriting, options in `specs/inter-bean-call-diagnostic/SPEC.md` Future work) (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance
 	- Swift has no runtime subclass proxies, and `enum`/`struct` configurations can't be overridden; candidates: macro-rewritten bodies, a configuration instance owned by the context that forwards to accessors, or generating a subclass of a `class` configuration
-	- Cheap first step regardless: a build diagnostic when a `@Bean` body calls another `@Bean` directly, suggesting a parameter instead
+	- ~~Cheap first step regardless: a build diagnostic when a `@Bean` body calls another `@Bean` directly, suggesting a parameter instead~~ (done: warning `bean.directCall`)

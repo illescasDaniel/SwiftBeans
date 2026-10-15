@@ -67,7 +67,7 @@ struct SwiftBeansGeneratorMain {
 
 		let result = SwiftBeansGeneration.generate(input: input)
 		for diagnostic in result.diagnostics {
-			fputs("\(diagnostic.rendered)\n", stderr)
+			printError(diagnostic.rendered)
 		}
 		guard let output = result.output else {
 			exit(1)
@@ -79,8 +79,13 @@ struct SwiftBeansGeneratorMain {
 		}
 	}
 
+	/// `stderr` is not concurrency-safe to reference on Linux (Swift 6 mode).
+	private static func printError(_ message: String) {
+		FileHandle.standardError.write(Data((message + "\n").utf8))
+	}
+
 	private static func fail(_ message: String) -> Never {
-		fputs("error: \(message)\n", stderr)
+		printError("error: \(message)")
 		exit(1)
 	}
 }
