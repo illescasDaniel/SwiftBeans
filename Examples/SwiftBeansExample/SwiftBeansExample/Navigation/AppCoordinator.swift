@@ -1,13 +1,26 @@
 import Observation
+import SwiftBeans
 import SwiftUI
 
+/// Builds screens from injected factories, so it never sees the context:
+/// `() -> T` re-reads a transient accessor, `(Item) -> T` calls an assisted accessor.
+/// Transient: factories capture the context, so a singleton holding them would keep it alive.
+@Service(scope: .transient)
 @Observable
 final class AppCoordinator {
 	var path = NavigationPath()
-	private let container: any AppContextProtocol
+	private let makeItemList: () -> ItemListViewModel
+	private let makeItemDetail: (Item) -> ItemDetailViewModel
+	private let makeFeaturesDemo: () -> FeaturesDemoViewModel
 
-	init(container: any AppContextProtocol) {
-		self.container = container
+	init(
+		makeItemList: @escaping () -> ItemListViewModel,
+		makeItemDetail: @escaping (Item) -> ItemDetailViewModel,
+		makeFeaturesDemo: @escaping () -> FeaturesDemoViewModel
+	) {
+		self.makeItemList = makeItemList
+		self.makeItemDetail = makeItemDetail
+		self.makeFeaturesDemo = makeFeaturesDemo
 	}
 
 	func push(_ route: Route) {
@@ -22,11 +35,11 @@ final class AppCoordinator {
 	func build(_ route: Route) -> some View {
 		switch route {
 		case .itemList:
-			ItemListView(viewModel: container.itemListViewModel)
+			ItemListView(viewModel: makeItemList())
 		case .itemDetail(let item):
-			ItemDetailView(viewModel: container.itemDetailViewModel(item: item))
+			ItemDetailView(viewModel: makeItemDetail(item))
 		case .featuresDemo:
-			FeaturesDemoView(viewModel: container.featuresDemoViewModel)
+			FeaturesDemoView(viewModel: makeFeaturesDemo())
 		}
 	}
 }

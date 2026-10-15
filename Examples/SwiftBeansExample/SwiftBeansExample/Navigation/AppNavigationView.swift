@@ -26,12 +26,12 @@ struct AppRootView: View {
 #if DEBUG
 #Preview("AppRootView") {
 	let context = FakeAppContext()
-	AppRootView(coordinator: AppCoordinator(container: context))
+	AppRootView(coordinator: context.appCoordinator)
 }
 
 #Preview("AppNavigationView") {
 	let context = FakeAppContext()
-	let coordinator = AppCoordinator(container: context)
+	let coordinator = context.appCoordinator
 	AppNavigationView()
 		.environment(coordinator)
 }

@@ -233,3 +233,82 @@ enum KeyNormalization {
 		return type
 	}
 }
+
+/// A function-typed dependency parameter: `(Item) -> ItemDetailViewModel`, `() -> T`.
+struct FactoryType: Equatable, Sendable {
+	/// Canonical spellings (`FactoryNormalization.canonicalSpelling`), in order.
+	var parameterTypes: [String]
+	var returnKey: TypeKey
+	var returnSpelledWithAny: Bool
+
+	/// `(Item) -> ItemDetailViewModel`
+	var description: String {
+		"(\(parameterTypes.joined(separator: ", "))) -> \(returnKey)"
+	}
+}
+
+/// Why a function type cannot be a factory.
+struct UnsupportedFactory: Error, Equatable, Sendable, CustomStringConvertible {
+	var description: String
+}
+
+enum FactoryNormalization {
+	/// `nil` when `type` is not a function type; attributes (`@escaping`, `@Sendable`) and parentheses are looked through.
+	static func factory(for type: TypeSyntax) -> Result<FactoryType, UnsupportedFactory>? {
+		guard let function = functionType(type) else { return nil }
+		var parameterTypes: [String] = []
+		for element in function.parameters {
+			if element.ellipsis != nil {
+				return .failure(UnsupportedFactory(description: "factory parameters cannot be variadic"))
+			}
+			if let attributed = element.type.as(AttributedTypeSyntax.self), !attributed.specifiers.isEmpty {
+				return .failure(UnsupportedFactory(description: "factory parameters cannot be inout, borrowing, consuming or sending"))
+			}
+			parameterTypes.append(KeyNormalization.canonicalSpelling(of: element.type))
+		}
+		switch KeyNormalization.key(for: function.returnClause.type) {
+		case .success(let normalized):
+			if normalized.key == .nominal([.init("Void")]) {
+				return .failure(UnsupportedFactory(description: "the factory's return type is not injectable: Void cannot be injected"))
+			}
+			return .success(FactoryType(
+				parameterTypes: parameterTypes,
+				returnKey: normalized.key,
+				returnSpelledWithAny: normalized.spelledWithAny
+			))
+		case .failure(let unsupported):
+			return .failure(UnsupportedFactory(description: "the factory's return type is not injectable: \(unsupported)"))
+		}
+	}
+
+	private static func functionType(_ type: TypeSyntax) -> FunctionTypeSyntax? {
+		var type = type
+		while true {
+			if let function = type.as(FunctionTypeSyntax.self) {
+				return function
+			}
+			if let attributed = type.as(AttributedTypeSyntax.self) {
+				type = attributed.baseType
+			} else if let tuple = type.as(TupleTypeSyntax.self), tuple.elements.count == 1,
+			          let element = tuple.elements.first, element.firstName == nil, element.ellipsis == nil
+			{
+				type = element.type
+			} else {
+				return nil
+			}
+		}
+	}
+}
+
+extension KeyNormalization {
+	/// Comparable spelling for assisted-factory matching: the key's description when `type` is a valid key,
+	/// otherwise the spelling without whitespace and `@escaping`.
+	static func canonicalSpelling(of type: TypeSyntax) -> String {
+		if case .success(let normalized) = key(for: type) {
+			return normalized.key.description
+		}
+		return type.trimmedDescription
+			.replacingOccurrences(of: "@escaping", with: "")
+			.filter { !$0.isWhitespace }
+	}
+}

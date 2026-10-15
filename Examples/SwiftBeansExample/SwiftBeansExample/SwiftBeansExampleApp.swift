@@ -6,7 +6,7 @@ struct SwiftBeansExampleApp: App {
 
 	init() {
 		let context = AppContext()
-		_coordinator = State(initialValue: AppCoordinator(container: context))
+		_coordinator = State(initialValue: context.appCoordinator)
 	}
 
 	var body: some Scene {

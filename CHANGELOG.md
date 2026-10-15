@@ -7,6 +7,7 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 ### Added
 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
+- Factory injection: a bean parameter `(Item) -> ItemDetailViewModel` is wired to the assisted accessor and `() -> T` to a deferred accessor; factories do not count as dependency cycles (`specs/factory-injection/SPEC.md`).
 
 ## [0.1.0] - 2026-10-15
 

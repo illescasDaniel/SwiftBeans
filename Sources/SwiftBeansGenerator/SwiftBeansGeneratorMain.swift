@@ -67,7 +67,7 @@ struct SwiftBeansGeneratorMain {
 
 		let result = SwiftBeansGeneration.generate(input: input)
 		for diagnostic in result.diagnostics {
-			fputs("\(diagnostic.rendered)\n", stderr)
+			writeError("\(diagnostic.rendered)\n")
 		}
 		guard let output = result.output else {
 			exit(1)
@@ -80,7 +80,11 @@ struct SwiftBeansGeneratorMain {
 	}
 
 	private static func fail(_ message: String) -> Never {
-		fputs("error: \(message)\n", stderr)
+		writeError("error: \(message)\n")
 		exit(1)
+	}
+
+	private static func writeError(_ message: String) {
+		try? FileHandle.standardError.write(contentsOf: Data(message.utf8))
 	}
 }

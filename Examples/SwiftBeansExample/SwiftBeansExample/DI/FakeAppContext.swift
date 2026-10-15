@@ -24,6 +24,14 @@ final class FakeAppContext: AppContextProtocol {
 		ItemDetailViewModel(repository: itemRepository, item: item)
 	}
 
+	var appCoordinator: AppCoordinator {
+		AppCoordinator(
+			makeItemList: { self.itemListViewModel },
+			makeItemDetail: { self.itemDetailViewModel(item: $0) },
+			makeFeaturesDemo: { self.featuresDemoViewModel }
+		)
+	}
+
 	var featuresDemoViewModel: FeaturesDemoViewModel {
 		FeaturesDemoViewModel(
 			repository: itemRepository,

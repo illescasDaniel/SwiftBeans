@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Feature | `compile-time-di` |
-| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15; amendment "Runtime arguments (`@Assisted`)" approved — 2026-10-15 |
+| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15; amendment "Runtime arguments (`@Assisted`)" approved — 2026-10-15; factory injection split into `specs/factory-injection/SPEC.md` |
 | Swift tools | 6.4+ (matches `Package.swift`) |
 | Platforms | macOS first; Apple platforms + Linux as package allows |
 | Related targets (planned) | `SwiftBeans` (public API + re-exported macros), `SwiftBeansMacros` (macro plugin), `SwiftBeansPlugin` / generator executable (build tool), tests |
@@ -216,7 +216,7 @@ A key is the type a provider produces (`@Service` type or its `boundTo:`, `@Bean
 1. **Spelling normalized from syntax**, not raw text: whitespace and redundant parentheses do not matter (`[String:Int]` ≡ `[String: Int]`, `(any P)` ≡ `any P`), and `Array<T>` / `Dictionary<K, V>` match their sugared forms `[T]` / `[K: V]`.
 2. **`any P` ≡ `P`.** A protocol spelled with and without `any` is one key (e.g. `@Service(boundTo: Store.self)` satisfies `init(store: any Store)`). The generated accessor and protocol requirement use the `any P` spelling when any declaration in the graph spells that key with `any`; otherwise `P`.
 3. **Qualified names and typealiases are matched by spelling.** `Swift.String` and `String` are different keys, as are a typealias and its underlying type. When a dependency is missing and a provider exists whose key has the same last component, the diagnostic names it as a likely match.
-4. **Unsupported key types fail the build** at the declaration: optionals (`T?`, `T!`), tuples, function types, opaque types (`some P`), metatypes, `Self`, protocol compositions (`any A & B`), and generic parameters.
+4. **Unsupported key types fail the build** at the declaration: optionals (`T?`, `T!`), tuples, function types (as keys; see `specs/factory-injection/SPEC.md` for factory parameters), opaque types (`some P`), metatypes, `Self`, protocol compositions (`any A & B`), and generic parameters.
 
 #### Accessor names
 
@@ -253,7 +253,7 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 1. **Method accessor.** It gets `func <accessorName>(<assisted parameters>) -> <Key>` on the context and the same requirement on `{Context}Protocol`, instead of a property. The accessor name follows the usual rules for its key. The method's parameters are the assisted parameters in declaration order, each with its external label, internal name and type spelled as in the source (`_` labels are kept). Assisted parameter types are not keys, so the key restrictions (optionals, tuples, functions…) do not apply to them.
 2. **Construction.** The generated call passes every parameter in the initializer's order: assisted ones from the method's arguments, the rest from the graph under the normal rules (required keys must be provided; defaulted ones are optional dependencies).
 3. **Always a new instance.** Each call constructs a new instance, so an assisted provider is transient whether or not `scope:` is written. An explicit `scope: .singleton` fails the build at the `scope:` argument.
-4. **Not injectable.** The graph cannot supply runtime arguments, so another provider that depends on an assisted provider's key fails the build at that parameter, naming the method to call instead. A defaulted parameter with that key keeps its default. (Injecting a factory such as `(Item) -> ItemDetailViewModel` is deferred; see Out of scope.)
+4. **Not injectable.** The graph cannot supply runtime arguments, so another provider that depends on an assisted provider's key fails the build at that parameter, naming the method to call instead. A defaulted parameter with that key keeps its default. (A factory such as `(Item) -> ItemDetailViewModel` can be injected instead; see `specs/factory-injection/SPEC.md`.)
 5. **Graph rules still apply.** Assisted providers count for duplicate keys, accessor-name collisions, and cycle detection over their injected parameters.
 6. **Unsupported in v1** (each fails the build at the parameter): a default value on an `@Assisted` parameter, and `inout` or variadic `@Assisted` parameters.
 7. **Parameters only.** `@Assisted` on a stored property of a scanned type fails the build at the attribute.
@@ -628,9 +628,9 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - Request / session / Web scopes
 - SwiftUI `@Environment` bridges (may be later)
 - Subcontexts (candidate for v1.1)
-- Injecting assisted factories into other beans (e.g. a bean taking `(Item) -> ItemDetailViewModel`); assisted providers are only reachable from the context in v1
+- Function types as provider keys or `@Bean` return types. Injecting factories as dependency parameters (`(Item) -> ItemDetailViewModel`, `() -> T`) is specified in `specs/factory-injection/SPEC.md`
 - Default values on `@Assisted` parameters
-- Circular dependencies broken via lazy/`ObjectFactory` (fail instead)
+- Circular dependencies are an error, except through deferred / assisted factory parameters (see `specs/factory-injection/SPEC.md`)
 - Drop-in compatibility with Sword, Pin, Needle, Swinject, or Factory
 - Generating fake / mock `@ApplicationContext` implementations (apps hand-write fakes against `{Context}Protocol`)
 

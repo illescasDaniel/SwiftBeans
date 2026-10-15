@@ -36,6 +36,8 @@ struct BeanParameter {
 	var location: SourcePosition
 	/// Non-nil for an `@Assisted` parameter.
 	var assisted: AssistedArgument?
+	/// Non-nil for a function-typed parameter that can be a factory; `key` is `nil` then.
+	var factory: FactoryType?
 }
 
 /// A runtime argument of an assisted provider's method accessor.
@@ -46,6 +48,8 @@ struct AssistedArgument {
 	var internalName: String
 	/// As written in the source.
 	var typeSpelling: String
+	/// For matching against a factory's parameter types.
+	var canonicalType: String
 }
 
 /// Builds providers from scanned declarations, matching extensions and initializers across files.
@@ -257,8 +261,30 @@ struct ProviderResolver {
 					assisted: AssistedArgument(
 						label: parameter.label,
 						internalName: parameter.internalName,
-						typeSpelling: parameter.typeSpelling
-					)
+						typeSpelling: parameter.typeSpelling,
+						canonicalType: parameter.canonicalType
+					),
+					factory: nil
+				)
+			}
+			if let factory = parameter.factory {
+				var resolved: FactoryType?
+				switch factory {
+				case .success(let value):
+					resolved = value
+				case .failure(let unsupported) where !parameter.hasDefault:
+					error("factory.unsupported", at: parameter.typeLocation, "cannot inject '\(parameter.typeSpelling)': \(unsupported)")
+				case .failure:
+					break
+				}
+				return BeanParameter(
+					label: parameter.label,
+					key: nil,
+					spelledWithAny: false,
+					hasDefault: parameter.hasDefault,
+					location: parameter.location,
+					assisted: nil,
+					factory: resolved
 				)
 			}
 			var key: TypeKey?
@@ -278,7 +304,8 @@ struct ProviderResolver {
 				spelledWithAny: spelledWithAny,
 				hasDefault: parameter.hasDefault,
 				location: parameter.location,
-				assisted: nil
+				assisted: nil,
+				factory: nil
 			)
 		}
 	}

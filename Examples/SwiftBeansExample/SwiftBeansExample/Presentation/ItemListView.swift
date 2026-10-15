@@ -78,7 +78,7 @@ struct ItemListView: View {
 #if DEBUG
 #Preview("ItemListView") {
 	let context = FakeAppContext()
-	let coordinator = AppCoordinator(container: context)
+	let coordinator = context.appCoordinator
 	NavigationStack {
 		ItemListView(viewModel: context.itemListViewModel)
 	}

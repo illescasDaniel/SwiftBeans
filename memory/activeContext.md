@@ -4,20 +4,21 @@ _Last updated: 2026-10-15_
 
 ## Branch
 
-- `main`
+- `cursor/factory-injection-53df` (base `main` @ `6b04703`)
 
 ## Current focus
 
-Review backlog cleared (2026-10-15): example-app fixes, product surface (`SwiftBeansGeneratorCore` no longer a product, `package` access), README written, `.claude` symlinks to `.cursor` skills/rules. All uncommitted; `@Assisted` is committed (`25e0b04`). Verified: `swift test` 133, example macOS tests, iOS Simulator and Release builds.
+Factory injection (`specs/factory-injection/SPEC.md`): bean parameters `(Item) -> ItemDetailViewModel` (assisted factory) and `() -> T` (deferred factory). Implemented and tested on Linux; spec was written together with the implementation and still awaits human review.
 
 ## Just changed
 
-- Example: Swift 6 mode, `@State` view models, `LoadState`, throwing `ItemRepository`, `#if DEBUG` fakes and Previews, Release `URLSession.shared`
-- `Package.swift`: products are only `SwiftBeans` + `SwiftBeansPlugin`
-- `README.md` (new)
+- Generator: `FactoryType` / `FactoryNormalization` (`TypeKey.swift`), `FactoryBinding.swift`, `BeanParameter.factory`, `GraphValidator` step 3b (`factory.unresolved`, `graph.missingDependency`), cycle detection ignores factory params, `CodeGenerator` emits closures; scanner stores `factory` / `canonicalType`
+- `GeneratorFactoryInjectionTests` (+ byte-identical baseline, verified against `main`)
+- Example: `AppCoordinator` is a transient `@Service` taking `makeItemList` / `makeItemDetail` / `makeFeaturesDemo` factories; `FakeAppContext.appCoordinator`; tests updated (example not compiled on Linux: SwiftUI)
+- `GeneratedFileWriterTests`: 1s mtime tolerance (Linux); `SwiftBeansGeneratorMain` Linux `FileHandle.standardError` fix kept
 
 ## Next steps
 
-1. Commit this batch when asked
-2. Spec assisted-factory injection (`(Item) -> ItemDetailViewModel`) — Phase 1
-3. Optional: push `main`
+1. Review `specs/factory-injection/SPEC.md`
+2. Run the example's `xcodebuild test` and iOS Simulator build on macOS (not verifiable on Linux)
+3. Qualifiers is next in the suggested order

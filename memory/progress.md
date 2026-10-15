@@ -79,7 +79,7 @@
 
 ### Open
 
-- [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
+- [x] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel` — done on `cursor/factory-injection-53df` (2026-10-15)
 
 - [x] Published as public repo `illescasDaniel/SwiftBeans`, MIT license, tag + release `0.1.0` (2026-10-15)
 
@@ -88,7 +88,7 @@
 Suggested order: CI first, then factory injection, then qualifiers.
 
 - [x] CI: GitHub Action (`.github/workflows/ci.yml`, `xcode-27` runner, Xcode 27.0) running `swift test` + example macOS tests and iOS Simulator build; README badge; `CHANGELOG.md` (2026-10-15). Releases stay semver `0.x` while the API may break
-- [ ] Factory injection (same item as the backlog above): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
+- [x] Factory injection (same item as the backlog above; `specs/factory-injection/SPEC.md`, 2026-10-15): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
 - [ ] Qualifiers: `@Bean(named: "snakeCase")` / `@Service(named:)` + `@Qualifier("snakeCase") decoder: JSONDecoder`. Notes from the 2026-10-15 discussion:
 	- Key is (type, qualifier), not a global name: `snakeCase` on `JSONDecoder` and on `JSONEncoder` are different beans
 	- Unqualified bean is the default; unknown (type, name) pair is a build error at the parameter; names must be string literals

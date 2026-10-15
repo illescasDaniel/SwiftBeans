@@ -6,6 +6,6 @@ import SwiftBeans
 /// - `httpDataRequestHandler` / `httpClient` (from `@Configuration` + HTTIES)
 /// - `itemRepository` → `JSONPlaceholderItemRepository` as `ItemRepository`
 /// - `fetchItemsUseCase`
-/// - transient view models
+/// - transient view models, and `appCoordinator` (receives them as factories)
 @ApplicationContext
 final class AppContext {}

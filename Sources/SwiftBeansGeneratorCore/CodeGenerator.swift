@@ -14,11 +14,19 @@ enum CodeGenerator {
 			for parameter in provider.parameters where parameter.spelledWithAny {
 				if let key = parameter.key { anyKeys.insert(key) }
 			}
+			for case let factory? in provider.parameters.map(\.factory) where factory.returnSpelledWithAny {
+				anyKeys.insert(factory.returnKey)
+			}
 		}
 		// Assisted keys are not injectable, so a defaulted parameter with one keeps its default.
 		let provided = Set(providers.filter { !$0.isAssisted }.map(\.key))
 		func typeName(_ key: TypeKey) -> String {
 			anyKeys.contains(key) ? "any \(key)" : key.description
+		}
+
+		var firstByKey: [TypeKey: BeanProvider] = [:]
+		for provider in providers where firstByKey[provider.key] == nil {
+			firstByKey[provider.key] = provider
 		}
 
 		let sorted = providers.sorted { $0.key.accessorName < $1.key.accessorName }
@@ -45,6 +53,13 @@ enum CodeGenerator {
 					value = assisted.internalName
 				} else if let key = parameter.key, provided.contains(key) {
 					value = "self.\(key.accessorName)"
+				} else if let factory = parameter.factory {
+					switch FactoryBinding.resolve(factory, providersByKey: { firstByKey[$0] }) {
+					case .deferred(let target), .assisted(let target):
+						value = FactoryBinding.closure(for: target)
+					case .missing, .mismatch:
+						return nil
+					}
 				} else {
 					return nil
 				}
