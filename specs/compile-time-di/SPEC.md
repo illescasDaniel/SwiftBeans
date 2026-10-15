@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Feature | `compile-time-di` |
-| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15 |
+| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15; amendment "Runtime arguments (`@Assisted`)" approved — 2026-10-15 |
 | Swift tools | 6.4+ (matches `Package.swift`) |
 | Platforms | macOS first; Apple platforms + Linux as package allows |
 | Related targets (planned) | `SwiftBeans` (public API + re-exported macros), `SwiftBeansMacros` (macro plugin), `SwiftBeansPlugin` / generator executable (build tool), tests |
@@ -53,7 +53,7 @@ Consuming code obtains dependencies from the root (or a later child scope), not 
 
 ### Generated context protocol: `{ContextTypeName}Protocol`
 
-For each `@ApplicationContext` type (e.g. `AppContext`), the generator also emits a protocol named **`{ContextTypeName}Protocol`** (e.g. `AppContextProtocol`) with a read-only getter per injectable key — same names and types as the concrete accessors — plus `extension AppContext: AppContextProtocol {}`.
+For each `@ApplicationContext` type (e.g. `AppContext`), the generator also emits a protocol named **`{ContextTypeName}Protocol`** (e.g. `AppContextProtocol`) with a read-only getter per injectable key, and a method per assisted provider (see Runtime arguments) — same names and signatures as the concrete accessors — plus `extension AppContext: AppContextProtocol {}`.
 
 ```swift
 // Generated
@@ -112,6 +112,36 @@ final class ReportService {
 	convenience init() { … } // used by tests, not by the graph
 }
 ```
+
+### Runtime arguments: `@Assisted`
+
+Some values are only known where an object is created: an item id, a navigation argument, a search query. Mark those parameters `@Assisted` (assisted injection, as in Dagger/Hilt) and the context exposes a **method** that takes them instead of a property; the graph fills in the remaining parameters.
+
+```swift
+@Service
+@MainActor
+final class ItemDetailViewModel {
+	init(repository: ItemRepository, @Assisted item: Item) { … }
+}
+
+// Generated
+protocol AppContextProtocol: AnyObject {
+	func itemDetailViewModel(item: Item) -> ItemDetailViewModel
+}
+
+extension AppContext {
+	func itemDetailViewModel(item: Item) -> ItemDetailViewModel {
+		ItemDetailViewModel(repository: self.itemRepository, item: item)
+	}
+}
+
+// Call site
+let viewModel = context.itemDetailViewModel(item: selectedItem)
+```
+
+`@Assisted` is a property wrapper in `SwiftBeans` used on parameters (SE-0293). It only has `init(wrappedValue:)`, so callers pass a plain `Item` and the initializer body reads `item` as an ordinary value; it is a marker for the generator, and manual construction (`ItemDetailViewModel(repository: fake, item: item)`) needs nothing extra. It works the same on `@Bean` method parameters.
+
+Use it for per-instance runtime data. Configuration and services belong in the graph as beans.
 
 ### Scopes (v1)
 
@@ -216,6 +246,20 @@ Two keys that produce the same accessor name fail the build, naming both provide
 5. **Scope literal.** `scope:` must be `.singleton` or `.transient`, optionally spelled `BeanScope.…` or `SwiftBeans.BeanScope.…`. Any other expression fails the build (it cannot be evaluated at build time).
 6. **Providers from local packages must be public.** A `@Service` declared in a local package target must be `public` / `open` with a `public` selected initializer (a memberwise initializer is never public); a `@Bean` must be `public static` in a `public` configuration type. Otherwise the build fails at that declaration, since the app's generated code cannot call it.
 
+#### Assisted providers
+
+A provider whose selected initializer or `@Bean` method has at least one parameter marked `@Assisted` (unqualified or `@SwiftBeans.Assisted`) is an **assisted provider**.
+
+1. **Method accessor.** It gets `func <accessorName>(<assisted parameters>) -> <Key>` on the context and the same requirement on `{Context}Protocol`, instead of a property. The accessor name follows the usual rules for its key. The method's parameters are the assisted parameters in declaration order, each with its external label, internal name and type spelled as in the source (`_` labels are kept). Assisted parameter types are not keys, so the key restrictions (optionals, tuples, functions…) do not apply to them.
+2. **Construction.** The generated call passes every parameter in the initializer's order: assisted ones from the method's arguments, the rest from the graph under the normal rules (required keys must be provided; defaulted ones are optional dependencies).
+3. **Always a new instance.** Each call constructs a new instance, so an assisted provider is transient whether or not `scope:` is written. An explicit `scope: .singleton` fails the build at the `scope:` argument.
+4. **Not injectable.** The graph cannot supply runtime arguments, so another provider that depends on an assisted provider's key fails the build at that parameter, naming the method to call instead. A defaulted parameter with that key keeps its default. (Injecting a factory such as `(Item) -> ItemDetailViewModel` is deferred; see Out of scope.)
+5. **Graph rules still apply.** Assisted providers count for duplicate keys, accessor-name collisions, and cycle detection over their injected parameters.
+6. **Unsupported in v1** (each fails the build at the parameter): a default value on an `@Assisted` parameter, and `inout` or variadic `@Assisted` parameters.
+7. **Parameters only.** `@Assisted` on a stored property of a scanned type fails the build at the attribute.
+8. `@Assisted` on parameters of other initializers or functions (not the selected one) has no effect.
+9. These rules are checked by the generator, not the macros, because the selected initializer may be declared in another file.
+
 #### Imports in the generated file
 
 1. The generated file imports `Foundation`, `SwiftBeans`, and every module imported by a scanned file, one line per module (the first path component: `import struct Foundation.URL` → `import Foundation`), sorted.
@@ -248,7 +292,7 @@ Two keys that produce the same accessor name fail the build, naming both provide
 
 ## Behavioral rules
 
-1. **Compile-time completeness:** If a required (non-defaulted) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph, the build fails with a diagnostic at that parameter.
+1. **Compile-time completeness:** If a required (non-defaulted, non-`@Assisted`) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph, the build fails with a diagnostic at that parameter.
 2. **No cycles:** Cyclic dependency graphs fail the build.
 3. **Duplicates:** Two providers for the same injectable key (normalized type; see Generator rules → Injectable keys) fail the build.
 4. **Plain types stay plain:** Prefer constructor injection. `@Service` types remain manually constructible in tests without the generated context.
@@ -460,6 +504,48 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 **When** the target builds  
 **Then** both are in the graph and `Ranker` receives `Features.Search`
 
+### Scenario: Assisted service gets a method accessor
+
+**Given** `@Service final class ItemDetailViewModel { init(repository: ItemRepository, @Assisted item: Item) }` and a provided `ItemRepository`  
+**When** the target builds  
+**Then** `AppContextProtocol` requires `func itemDetailViewModel(item: Item) -> ItemDetailViewModel`  
+**And** the context implements it as `ItemDetailViewModel(repository: self.itemRepository, item: item)`  
+**And** there is no `itemDetailViewModel` property  
+**And** two calls return two different instances
+
+### Scenario: Assisted parameters keep labels and order
+
+**Given** `@Service final class Search { init(@Assisted _ query: String, api: API, @Assisted page pageIndex: Int) }`  
+**When** the target builds  
+**Then** the context has `func search(_ query: String, page pageIndex: Int) -> Search`  
+**And** it calls `Search(query, api: self.api, page: pageIndex)`
+
+### Scenario: Assisted `@Bean`
+
+**Given** `@Bean static func report(store: any Store, @Assisted title: String) -> Report` in a `@Configuration` type  
+**When** the target builds  
+**Then** the context has `func report(title: String) -> Report` that calls the method with `self.store` and `title`
+
+### Scenario: Assisted provider cannot be injected
+
+**Given** assisted `ItemDetailViewModel` and `@Service final class Coordinator { init(detail: ItemDetailViewModel) }`  
+**When** the target builds  
+**Then** the build fails at `Coordinator`'s `detail` parameter, saying `ItemDetailViewModel` takes runtime arguments and naming `itemDetailViewModel(item:)`
+
+### Scenario: Assisted provider cannot be a singleton
+
+**Given** `@Service(scope: .singleton)` on a type whose selected initializer has an `@Assisted` parameter  
+**When** the target builds  
+**Then** the build fails at the `scope:` argument  
+**When** `scope:` is omitted  
+**Then** the build succeeds and each call creates a new instance
+
+### Scenario: Unsupported `@Assisted` usage fails the build
+
+**Given** an `@Assisted` parameter with a default value, an `@Assisted` variadic parameter, or `@Assisted` on a stored property of a `@Service` type  
+**When** the target builds  
+**Then** the build fails with an error at each of them
+
 ### Scenario: Declarations inside `#if` fail the build
 
 **Given** a `@Service` declared inside `#if DEBUG`  
@@ -541,7 +627,9 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - Generic `@Service` types; optional / tuple / function / opaque keys
 - Request / session / Web scopes
 - SwiftUI `@Environment` bridges (may be later)
-- Assisted injection / subcontexts (candidate for v1.1)
+- Subcontexts (candidate for v1.1)
+- Injecting assisted factories into other beans (e.g. a bean taking `(Item) -> ItemDetailViewModel`); assisted providers are only reachable from the context in v1
+- Default values on `@Assisted` parameters
 - Circular dependencies broken via lazy/`ObjectFactory` (fail instead)
 - Drop-in compatibility with Sword, Pin, Needle, Swinject, or Factory
 - Generating fake / mock `@ApplicationContext` implementations (apps hand-write fakes against `{Context}Protocol`)
@@ -568,6 +656,7 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Throwing / async factories | Not supported; macro error (2026-10-15) |
 | Diagnostics | `file:line:column`, all errors per run, stable order; single-declaration misuse via macros (2026-10-15) |
 | Singleton creation | Factory runs at most once per context, even under concurrent first access (2026-10-15) |
+| Runtime arguments | `@Assisted` parameter wrapper; assisted providers become context methods, are always transient and not injectable (2026-10-15) |
 
 ## Phase gate
 
@@ -576,3 +665,5 @@ Phase 1–2 approved 2026-10-14. Phase 3–4 implemented in package tests. Xcode
 `{Context}Protocol` generation: Phase 1 approved with plan 2026-10-14; Phase 3–4 follow in package tests + example `FakeAppContext` / Previews.
 
 Generator rules + Singleton storage (review #5–11, #13–16): Phase 1 approved 2026-10-15; Phase 2 in ARCHITECTURE.md.
+
+Runtime arguments (`@Assisted`): Phase 1–2 approved 2026-10-15; Phases 3–4 implemented 2026-10-15 (`swift test`: 133 tests). The example app adopts it in `ItemDetailViewModel` (replacing `load(seed:)`'s two-step setup) as its compile check.

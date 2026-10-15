@@ -12,6 +12,8 @@ struct ScannedFile {
 	var beans: [BeanDecl] = []
 	/// Annotated declarations under `#if` (not supported in v1).
 	var conditionalDecls: [SourcePosition] = []
+	/// `@Assisted` on stored properties of scanned types (parameters only; SPEC Assisted providers, rule 7).
+	var assistedPropertyLocations: [SourcePosition] = []
 	var imports: [ImportRecord] = []
 }
 
@@ -63,6 +65,8 @@ struct InitializerInfo {
 struct ParameterInfo {
 	/// `nil` for `_`.
 	var label: String?
+	/// The second name when present, else the first; as spelled, backticks included.
+	var internalName: String
 	var hasDefault: Bool
 	/// The parameter's start, for missing-dependency errors.
 	var location: SourcePosition
@@ -71,11 +75,21 @@ struct ParameterInfo {
 	/// `nil` when the type is not written (`var retries = 3`). For a defaulted optional, the wrapped type's key.
 	var key: Result<KeyNormalization.Normalized, UnsupportedKey>?
 	var typeSpelling: String
+	/// `@Assisted` / `@SwiftBeans.Assisted`.
+	var isAssisted: Bool
+	/// `T...`
+	var isVariadic: Bool
+	/// `inout T`
+	var isInout: Bool
+	/// The default value expression, when written.
+	var defaultLocation: SourcePosition?
 }
 
 struct ServiceDecl {
 	var typeName: String
 	var scope: ScopeLiteral
+	/// The `scope:` argument; non-nil only when a literal scope is written explicitly.
+	var scopeLocation: SourcePosition?
 	/// `boundTo:` key, when present.
 	var boundTo: (key: Result<KeyNormalization.Normalized, UnsupportedKey>, location: SourcePosition, spelling: String)?
 	var location: SourcePosition
@@ -86,6 +100,8 @@ struct BeanDecl {
 	var enclosingName: String
 	var name: String
 	var scope: ScopeLiteral
+	/// The `scope:` argument; non-nil only when a literal scope is written explicitly.
+	var scopeLocation: SourcePosition?
 	var isPublic: Bool
 	var parameters: [ParameterInfo]
 	var returnKey: Result<KeyNormalization.Normalized, UnsupportedKey>
@@ -235,7 +251,20 @@ struct DeclarationScanner {
 			hasWrappedProperty: hasWrappedProperty,
 			location: location
 		))
+		recordAssistedProperties(members)
 		walkMembers(members, enclosing: .type(name), conditional: conditional)
+	}
+
+	/// `@Assisted` belongs on parameters; on a stored property it is an error.
+	private mutating func recordAssistedProperties(_ members: MemberBlockItemListSyntax) {
+		for member in members {
+			guard let variable = member.decl.as(VariableDeclSyntax.self),
+			      variable.bindings.contains(where: { isStored($0) })
+			else { continue }
+			for case .attribute(let attribute) in variable.attributes where SwiftBeansSyntaxRules.isAssisted(attribute) {
+				result.assistedPropertyLocations.append(position(attribute))
+			}
+		}
 	}
 
 	private mutating func recordService(_ decl: DeclSyntax, attribute: AttributeSyntax, typeName: String, location: SourcePosition) {
@@ -260,6 +289,7 @@ struct DeclarationScanner {
 		result.services.append(ServiceDecl(
 			typeName: typeName,
 			scope: (try? SwiftBeansSyntaxRules.scope(of: attribute).get()) ?? .singleton,
+			scopeLocation: scopeLocation(of: attribute),
 			boundTo: boundTo,
 			location: location
 		))
@@ -283,6 +313,7 @@ struct DeclarationScanner {
 			enclosingName: enclosing.name,
 			name: function.name.text,
 			scope: (try? SwiftBeansSyntaxRules.scope(of: attribute).get()) ?? .singleton,
+			scopeLocation: scopeLocation(of: attribute),
 			isPublic: isPublic,
 			parameters: parameters(function.signature.parameterClause.parameters),
 			returnKey: KeyNormalization.key(for: returnType),
@@ -290,6 +321,16 @@ struct DeclarationScanner {
 			returnSpelling: returnType.trimmedDescription,
 			location: position(function)
 		))
+	}
+
+	/// The `scope:` argument, when it is a supported literal (a non-literal one is the macro's error).
+	private func scopeLocation(of attribute: AttributeSyntax) -> SourcePosition? {
+		guard case .success = SwiftBeansSyntaxRules.scope(of: attribute),
+		      let argument = attribute.arguments?.as(LabeledExprListSyntax.self)?.first(where: { $0.label?.text == "scope" })
+		else {
+			return nil
+		}
+		return position(argument)
 	}
 
 	// MARK: - Initializers and parameters
@@ -315,13 +356,21 @@ struct DeclarationScanner {
 		list.map { parameter in
 			let label = parameter.firstName.tokenKind == .wildcard ? nil : parameter.firstName.text
 			let hasDefault = parameter.defaultValue != nil
+			let isInout = parameter.type.as(AttributedTypeSyntax.self)?.specifiers.contains {
+				$0.as(SimpleTypeSpecifierSyntax.self)?.specifier.tokenKind == .keyword(.inout)
+			} == true
 			return ParameterInfo(
 				label: label,
+				internalName: (parameter.secondName ?? parameter.firstName).text,
 				hasDefault: hasDefault,
 				location: position(parameter),
 				typeLocation: position(parameter.type),
 				key: key(for: parameter.type, hasDefault: hasDefault),
-				typeSpelling: parameter.type.trimmedDescription
+				typeSpelling: parameter.type.trimmedDescription,
+				isAssisted: SwiftBeansSyntaxRules.isAssisted(parameter),
+				isVariadic: parameter.ellipsis != nil,
+				isInout: isInout,
+				defaultLocation: parameter.defaultValue.map { position($0.value) }
 			)
 		}
 	}
@@ -334,6 +383,13 @@ struct DeclarationScanner {
 			guard let variable = member.decl.as(VariableDeclSyntax.self) else { continue }
 			let modifiers = variable.modifiers.map(\.name.tokenKind)
 			if modifiers.contains(.keyword(.static)) || modifiers.contains(.keyword(.class)) || modifiers.contains(.keyword(.lazy)) {
+				continue
+			}
+			// `@Assisted` on a property is reported by `recordAssistedProperties`; it is not a parameter.
+			if variable.attributes.contains(where: { element in
+				if case .attribute(let attribute) = element { return SwiftBeansSyntaxRules.isAssisted(attribute) }
+				return false
+			}) {
 				continue
 			}
 			let isLet = variable.bindingSpecifier.tokenKind == .keyword(.let)
@@ -349,11 +405,16 @@ struct DeclarationScanner {
 					|| (!isLet && type.map { KeyNormalization.optionalWrapped($0) != nil } == true)
 				parameters.append(ParameterInfo(
 					label: identifier.identifier.text,
+					internalName: identifier.identifier.text,
 					hasDefault: hasDefault,
 					location: position(binding),
 					typeLocation: type.map { position($0) } ?? position(binding),
 					key: type.map { key(for: $0, hasDefault: hasDefault) },
-					typeSpelling: type?.trimmedDescription ?? ""
+					typeSpelling: type?.trimmedDescription ?? "",
+					isAssisted: false,
+					isVariadic: false,
+					isInout: false,
+					defaultLocation: binding.initializer.map { position($0.value) }
 				))
 			}
 		}

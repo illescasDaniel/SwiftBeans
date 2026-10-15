@@ -8,7 +8,7 @@ _Last updated: 2026-10-15_
 
 ## Current focus
 
-Review #5–11, #13–16 (generator rules, diagnostics, registry once-only) implemented 2026-10-15 through all four SDD phases; `swift test` (113) and the example's `xcodebuild test` are green. Uncommitted. Later batches: architecture items (BeanScope module split, non-public GeneratorCore product) and example-app fixes.
+Runtime arguments (`@Assisted`, assisted injection) implemented (Phases 3–4, 2026-10-15): `Assisted` wrapper, generator method accessors, `GeneratorAssistedTests`, example `ItemDetailViewModel` as compile check; uncommitted. Next: commit, then the assisted-factory injection backlog item. Review batches (generator rules, example compile check) are committed on `main` (`31d6864`, `20a1dcf`).
 
 ## Just changed
 
@@ -19,7 +19,7 @@ Review #5–11, #13–16 (generator rules, diagnostics, registry once-only) impl
 
 ## Next steps
 
-0. Commit this batch (when asked)
+0. Commit the `@Assisted` work; then spec the assisted-factory injection backlog item
 1. Example-app fixes from the review (the generated-code compile check landed: `Packages/GreetingKit`, `Features.WelcomeBanner`, `TagSummary`, `tagCounts` bean; ARCHITECTURE line "Still open from this document…" can now be dropped)
 1. Optional: push `main` when ready
 2. Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / `FakeAppContext` pattern)

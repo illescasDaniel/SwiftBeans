@@ -1,4 +1,4 @@
-/// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, cycles.
+/// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, assisted keys, cycles.
 ///
 /// Every check iterates providers sorted by `(key, location)`, never dictionary order.
 enum GraphValidator {
@@ -65,9 +65,26 @@ enum GraphValidator {
 			}
 		}
 
-		// 4. Cycles over injected edges.
+		// 4. Assisted keys are not injectable: the graph cannot supply runtime arguments.
+		for provider in providers {
+			for parameter in provider.parameters where !parameter.hasDefault {
+				guard let key = parameter.key, let indices = byKey[key], indices.allSatisfy({ providers[$0].isAssisted }) else { continue }
+				let assisted = providers[indices[0]]
+				let selector = assisted.key.accessorName + "("
+					+ assisted.parameters.compactMap(\.assisted).map { "\($0.label ?? "_"):" }.joined() + ")"
+				diagnostics.append(GeneratorDiagnostic(
+					id: "assisted.notInjectable",
+					location: parameter.location,
+					message: "'\(key)' takes runtime arguments and cannot be injected into '\(provider.displayName)'; call '\(selector)' on the context instead"
+				))
+			}
+		}
+
+		// 5. Cycles over injected edges (an assisted provider is never a dependency).
 		let edges = providers.map { provider in
-			provider.parameters.compactMap { parameter in parameter.key.flatMap { byKey[$0]?.first } }
+			provider.parameters.compactMap { parameter in
+				parameter.key.flatMap { byKey[$0]?.first }.flatMap { providers[$0].isAssisted ? nil : $0 }
+			}
 		}
 		for component in StronglyConnectedComponents.find(nodeCount: providers.count, edges: edges) {
 			let isCycle = component.count > 1 || edges[component[0]].contains(component[0])

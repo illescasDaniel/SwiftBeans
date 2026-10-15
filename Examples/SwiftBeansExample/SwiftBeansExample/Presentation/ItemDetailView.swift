@@ -2,19 +2,14 @@ import SwiftUI
 
 struct ItemDetailView: View {
 	@Bindable var viewModel: ItemDetailViewModel
-	let seed: Item
 
 	var body: some View {
 		List {
 			Section("Post") {
-				if let item = viewModel.item {
-					Text(item.title)
-						.font(.headline)
-					Text(item.detail)
-						.foregroundStyle(.secondary)
-				} else {
-					ProgressView()
-				}
+				Text(viewModel.item.title)
+					.font(.headline)
+				Text(viewModel.item.detail)
+					.foregroundStyle(.secondary)
 			}
 
 			Section {
@@ -23,9 +18,9 @@ struct ItemDetailView: View {
 					.foregroundStyle(.secondary)
 			}
 		}
-		.navigationTitle(viewModel.item.map { "#\($0.id)" } ?? "Post")
+		.navigationTitle("#\(viewModel.item.id)")
 		.task {
-			await viewModel.load(seed: seed)
+			await viewModel.refresh()
 		}
 	}
 }
@@ -34,8 +29,7 @@ struct ItemDetailView: View {
 	let context = FakeAppContext()
 	NavigationStack {
 		ItemDetailView(
-			viewModel: context.itemDetailViewModel,
-			seed: Item(id: 1, title: "Preview", detail: "Body")
+			viewModel: context.itemDetailViewModel(item: Item(id: 1, title: "Preview", detail: "Body"))
 		)
 	}
 }

@@ -66,7 +66,13 @@
 
 - [x] Example as generated-code compile check: local package `Packages/GreetingKit` (`GreetingKitLive` auto-imported), nested `Features.WelcomeBanner`, `[String: Int]` `@Bean` consumed as `Dictionary<String, Int>`, `@Inject` on `TagSummary` (2026-10-15)
 
+### Done (continued)
+
+- [x] Runtime arguments (`@Assisted`): Phases 1–4 done (2026-10-15). `Assisted` wrapper, `isAssisted` rules, scanner/resolver/validator/codegen, `GeneratorAssistedTests`; example `ItemDetailViewModel` uses `itemDetailViewModel(item:)` (`swift test` 133 tests green; example `xcodebuild test` + iOS Simulator build green)
+
 ### Open
+
+- [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
 
 - [ ] Review architecture batch: non-public GeneratorCore product, BeanScope module split
 - [ ] Review example-app fixes (SWIFT_VERSION 6, @State view models, no container in views, unused httpClient, `#if DEBUG` fakes, repository error handling, tests not asserting UI copy)

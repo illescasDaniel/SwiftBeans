@@ -19,16 +19,33 @@ struct BeanProvider {
 	var displayName: String
 	var construction: Construction
 	var parameters: [BeanParameter]
+
+	/// True when any parameter is `@Assisted`: the accessor is a method, not a property.
+	var isAssisted: Bool {
+		parameters.contains { $0.assisted != nil }
+	}
 }
 
 struct BeanParameter {
 	/// `nil` for `_`.
 	var label: String?
-	/// `nil` when the parameter can only take its default (unsupported or unwritten type).
+	/// `nil` when the parameter can only take its default (unsupported or unwritten type), and always for an assisted one.
 	var key: TypeKey?
 	var spelledWithAny: Bool
 	var hasDefault: Bool
 	var location: SourcePosition
+	/// Non-nil for an `@Assisted` parameter.
+	var assisted: AssistedArgument?
+}
+
+/// A runtime argument of an assisted provider's method accessor.
+struct AssistedArgument {
+	/// External label; `nil` for `_`.
+	var label: String?
+	/// As spelled, backticks included.
+	var internalName: String
+	/// As written in the source.
+	var typeSpelling: String
 }
 
 /// Builds providers from scanned declarations, matching extensions and initializers across files.
@@ -45,6 +62,9 @@ struct ProviderResolver {
 		for file in files {
 			for location in file.conditionalDecls {
 				resolver.error("decl.conditional", at: location, "SwiftBeans declarations inside '#if' blocks are not supported in v1")
+			}
+			for location in file.assistedPropertyLocations {
+				resolver.error("assisted.property", at: location, "@Assisted can only be applied to parameters, not stored properties")
 			}
 			for service in file.services {
 				resolver.resolve(service, origin: file.source.origin)
@@ -127,15 +147,16 @@ struct ProviderResolver {
 			)
 		}
 
+		let resolved = resolveParameters(parameters)
 		providers.append(BeanProvider(
 			key: normalized.key,
 			spelledWithAny: normalized.spelledWithAny,
-			scope: service.scope,
+			scope: scope(service.scope, scopeLocation: service.scopeLocation, parameters: resolved),
 			origin: origin,
 			location: service.location,
 			displayName: type.name,
 			construction: .initializer(typeName: type.name),
-			parameters: resolveParameters(parameters)
+			parameters: resolved
 		))
 	}
 
@@ -188,23 +209,58 @@ struct ProviderResolver {
 				"@Bean '\(displayName)' is declared in local package '\(module)'; it must be public in a public @Configuration type"
 			)
 		}
+		let resolved = resolveParameters(bean.parameters)
 		providers.append(BeanProvider(
 			key: normalized.key,
 			spelledWithAny: normalized.spelledWithAny,
-			scope: bean.scope,
+			scope: scope(bean.scope, scopeLocation: bean.scopeLocation, parameters: resolved),
 			origin: origin,
 			location: bean.location,
 			displayName: displayName,
 			construction: .staticMethod(typeName: bean.enclosingName, name: bean.name),
-			parameters: resolveParameters(bean.parameters)
+			parameters: resolved
 		))
 	}
 
 	// MARK: - Helpers
 
+	/// An assisted provider constructs a new instance per call, so it is always transient;
+	/// an explicit `.singleton` is an error at the `scope:` argument.
+	private mutating func scope(_ scope: ScopeLiteral, scopeLocation: SourcePosition?, parameters: [BeanParameter]) -> ScopeLiteral {
+		guard parameters.contains(where: { $0.assisted != nil }) else { return scope }
+		if scope == .singleton, let scopeLocation {
+			error("assisted.singleton", at: scopeLocation, "a provider with @Assisted parameters creates a new instance per call and cannot be a singleton")
+		}
+		return .transient
+	}
+
 	/// Unsupported keys fail the build unless the parameter has a default to fall back on.
+	/// Assisted parameters are runtime arguments, not keys: their types are not normalized.
 	private mutating func resolveParameters(_ parameters: [ParameterInfo]) -> [BeanParameter] {
 		parameters.map { parameter in
+			if parameter.isAssisted {
+				if let defaultLocation = parameter.defaultLocation {
+					error("assisted.default", at: defaultLocation, "@Assisted parameters cannot have a default value")
+				}
+				if parameter.isVariadic {
+					error("assisted.variadic", at: parameter.location, "@Assisted parameters cannot be variadic")
+				}
+				if parameter.isInout {
+					error("assisted.inout", at: parameter.location, "@Assisted parameters cannot be inout")
+				}
+				return BeanParameter(
+					label: parameter.label,
+					key: nil,
+					spelledWithAny: false,
+					hasDefault: parameter.hasDefault,
+					location: parameter.location,
+					assisted: AssistedArgument(
+						label: parameter.label,
+						internalName: parameter.internalName,
+						typeSpelling: parameter.typeSpelling
+					)
+				)
+			}
 			var key: TypeKey?
 			var spelledWithAny = false
 			switch parameter.key {
@@ -221,7 +277,8 @@ struct ProviderResolver {
 				key: key,
 				spelledWithAny: spelledWithAny,
 				hasDefault: parameter.hasDefault,
-				location: parameter.location
+				location: parameter.location,
+				assisted: nil
 			)
 		}
 	}

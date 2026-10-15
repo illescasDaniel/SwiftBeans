@@ -19,8 +19,8 @@ final class FakeAppContext: AppContextProtocol {
 		ItemListViewModel(fetchItems: fetchItemsUseCase)
 	}
 
-	var itemDetailViewModel: ItemDetailViewModel {
-		ItemDetailViewModel(repository: itemRepository)
+	func itemDetailViewModel(item: Item) -> ItemDetailViewModel {
+		ItemDetailViewModel(repository: itemRepository, item: item)
 	}
 
 	var featuresDemoViewModel: FeaturesDemoViewModel {

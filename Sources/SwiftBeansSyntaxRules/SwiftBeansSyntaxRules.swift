@@ -38,14 +38,32 @@ public struct Violation: Error, Equatable {
 public enum SwiftBeansSyntaxRules {
 	/// `@Service` / `@SwiftBeans.Service` → `.service`; `@Other.Service` or unknown names → `nil`.
 	public static func attribute(_ attribute: AttributeSyntax) -> SwiftBeansAttribute? {
+		swiftBeansName(of: attribute).flatMap { SwiftBeansAttribute(rawValue: $0) }
+	}
+
+	/// `Assisted`, `SwiftBeans.Assisted`; `@Other.Assisted` → false. Generic arguments are not part of an attribute name.
+	public static func isAssisted(_ attribute: AttributeSyntax) -> Bool {
+		swiftBeansName(of: attribute) == "Assisted"
+	}
+
+	/// True when any attribute on the parameter is `@Assisted` / `@SwiftBeans.Assisted`.
+	public static func isAssisted(_ parameter: FunctionParameterSyntax) -> Bool {
+		parameter.attributes.contains { element in
+			if case .attribute(let attribute) = element { return isAssisted(attribute) }
+			return false
+		}
+	}
+
+	/// The attribute's name when it is written bare or qualified with `SwiftBeans`.
+	private static func swiftBeansName(of attribute: AttributeSyntax) -> String? {
 		let type = attribute.attributeName
 		if let identifier = type.as(IdentifierTypeSyntax.self) {
-			return SwiftBeansAttribute(rawValue: identifier.name.text)
+			return identifier.name.text
 		}
 		if let member = type.as(MemberTypeSyntax.self),
 		   member.baseType.as(IdentifierTypeSyntax.self)?.name.text == "SwiftBeans"
 		{
-			return SwiftBeansAttribute(rawValue: member.name.text)
+			return member.name.text
 		}
 		return nil
 	}

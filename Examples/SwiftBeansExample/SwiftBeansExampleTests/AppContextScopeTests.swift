@@ -22,6 +22,16 @@ struct AppContextScopeTests {
 	}
 
 	@Test
+	func `Given assisted detail view model When called twice Then new instances carry their items`() {
+		let context = AppContext()
+		let first = context.itemDetailViewModel(item: Item(id: 1, title: "One", detail: "A"))
+		let second = context.itemDetailViewModel(item: Item(id: 2, title: "Two", detail: "B"))
+		#expect(first !== second)
+		#expect(first.item.id == 1)
+		#expect(second.item.id == 2)
+	}
+
+	@Test
 	func `Given protocol binding When resolving itemRepository Then returns JSONPlaceholder repository`() {
 		let context = AppContext()
 		#expect(context.itemRepository is JSONPlaceholderItemRepository)

@@ -2,26 +2,26 @@ import Foundation
 import Observation
 import SwiftBeans
 
-/// Transient detail screen VM.
-@Service(scope: .transient)
+/// Detail screen VM; the item is a runtime argument, so the context exposes `itemDetailViewModel(item:)`.
+@Service
 @Observable
 @MainActor
 final class ItemDetailViewModel {
 	private let repository: ItemRepository
 
-	private(set) var item: Item?
+	private(set) var item: Item
 	private(set) var isLoading = false
 	private(set) var statusText = ""
 
-	init(repository: ItemRepository) {
+	init(repository: ItemRepository, @Assisted item: Item) {
 		self.repository = repository
+		self.item = item
 	}
 
-	func load(seed: Item) async {
-		item = seed
+	func refresh() async {
 		isLoading = true
 		statusText = "Refreshing from API…"
-		if let refreshed = await repository.fetchItem(id: seed.id) {
+		if let refreshed = await repository.fetchItem(id: item.id) {
 			item = refreshed
 			statusText = "Loaded post #\(refreshed.id) via HTTIES"
 		} else {

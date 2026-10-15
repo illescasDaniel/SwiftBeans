@@ -15,22 +15,47 @@ enum CodeGenerator {
 				if let key = parameter.key { anyKeys.insert(key) }
 			}
 		}
-		let provided = Set(providers.map(\.key))
+		// Assisted keys are not injectable, so a defaulted parameter with one keeps its default.
+		let provided = Set(providers.filter { !$0.isAssisted }.map(\.key))
 		func typeName(_ key: TypeKey) -> String {
 			anyKeys.contains(key) ? "any \(key)" : key.description
 		}
 
 		let sorted = providers.sorted { $0.key.accessorName < $1.key.accessorName }
-		let requirements = sorted.map { "\tvar \($0.key.accessorName): \(typeName($0.key)) { get }" }
+		/// `item: Item`, `page pageIndex: Int`, `_ query: String`
+		func signature(_ provider: BeanProvider) -> String {
+			provider.parameters.compactMap(\.assisted).map { argument in
+				let name = switch argument.label {
+				case nil: "_ \(argument.internalName)"
+				case argument.internalName?: argument.internalName
+				case let label?: "\(label) \(argument.internalName)"
+				}
+				return "\(name): \(argument.typeSpelling)"
+			}.joined(separator: ", ")
+		}
+		let requirements = sorted.map { provider in
+			provider.isAssisted
+				? "\tfunc \(provider.key.accessorName)(\(signature(provider))) -> \(typeName(provider.key))"
+				: "\tvar \(provider.key.accessorName): \(typeName(provider.key)) { get }"
+		}
 		let accessors = sorted.map { provider in
 			let arguments = provider.parameters.compactMap { parameter -> String? in
-				guard let key = parameter.key, provided.contains(key) else { return nil }
-				let value = "self.\(key.accessorName)"
+				let value: String
+				if let assisted = parameter.assisted {
+					value = assisted.internalName
+				} else if let key = parameter.key, provided.contains(key) {
+					value = "self.\(key.accessorName)"
+				} else {
+					return nil
+				}
 				return parameter.label.map { "\($0): \(value)" } ?? value
 			}.joined(separator: ", ")
 			let construction = switch provider.construction {
 			case .initializer(let type): "\(type)(\(arguments))"
 			case .staticMethod(let type, let name): "\(type).\(name)(\(arguments))"
+			}
+			if provider.isAssisted {
+				return "\tfunc \(provider.key.accessorName)(\(signature(provider))) -> \(typeName(provider.key)) {\n\t\t\(construction)\n\t}"
 			}
 			let declaration = "\tvar \(provider.key.accessorName): \(typeName(provider.key)) {\n"
 			switch provider.scope {
