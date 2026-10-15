@@ -7,6 +7,15 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 ### Added
 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
+- Collection injection: a `[any P]` / `[P]` parameter receives every bean that is a `P` (key `P`, or a type that declares `: P` in scanned sources), sorted by accessor name. An explicit `[P]` bean still wins; `[any P]` with no members gets `[]`.
+
+### Changed
+
+- A defaulted collection parameter (`interceptors: [any Interceptor] = []`) with no `[P]` bean now receives the members of `P` instead of keeping its default when at least one member exists.
+
+### Fixed
+
+- The generator builds on Linux with Swift 6 (diagnostics go through `FileHandle.standardError`).
 
 ## [0.1.0] - 2026-10-15
 

@@ -27,6 +27,7 @@ Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Ca
 - [Concepts](#concepts)
 - [Scopes](#scopes)
 - [Binding to protocols](#binding-to-protocols)
+- [Collections: every bean of a kind](#collections-every-bean-of-a-kind)
 - [Choosing an initializer: `@Inject`](#choosing-an-initializer-inject)
 - [Runtime arguments: `@Assisted`](#runtime-arguments-assisted)
 - [Testing and Previews: `{Context}Protocol`](#testing-and-previews-contextprotocol)
@@ -155,6 +156,29 @@ final class FetchItemsUseCase {
 ```
 
 A `@Bean` whose return type is a protocol (`-> any APIClient`) does the same.
+
+## Collections: every bean of a kind
+
+A parameter typed `[any P]` (or `[P]`) receives every bean that is a `P`, like Spring's `List<P>` injection. Useful for analytics trackers, HTTP interceptors and plugins:
+
+```swift
+@Service final class ConsoleTracker: AnalyticsTracker { init() { … } }
+@Service final class FirebaseTracker: AnalyticsTracker { init() { … } }
+
+@Service
+final class Analytics {
+	init(trackers: [any AnalyticsTracker]) { … }
+}
+
+// Generated
+Analytics(trackers: [self.consoleTracker, self.firebaseTracker])
+```
+
+- A bean is a member when its key is `P` (`boundTo: P.self`, `-> any P`) or its type declares `: P` in a scanned declaration or extension (also through a superclass or sub-protocol). Conformance is matched by spelling.
+- Members are listed by accessor name. Each keeps its own accessor and scope.
+- A bean that provides `[P]` itself (`@Bean static func trackers() -> [any AnalyticsTracker]`) wins over the members, and `@Bean static func tags() -> [String]` stays an ordinary bean.
+- No members: `[any P]` gets `[]`; `[P]` without `any` (e.g. `[String]`) is a missing dependency. A defaulted collection keeps its default.
+- Assisted beans are never members, and a bean is never a member of its own collection (so a composite `@Service(boundTo: P.self)` can wrap all the others).
 
 ## Choosing an initializer: `@Inject`
 

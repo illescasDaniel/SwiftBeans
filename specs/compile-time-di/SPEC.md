@@ -245,6 +245,7 @@ Two keys that produce the same accessor name fail the build, naming both provide
 4. **Defaulted parameters are optional dependencies.** A parameter with a default value is injected when the graph provides its key (for `T? = …`, the key `T`) and otherwise left to its default. It never causes a missing-dependency error, and it only participates in cycle detection when it is injected. A parameter without a default must have a supported, provided key.
 5. **Scope literal.** `scope:` must be `.singleton` or `.transient`, optionally spelled `BeanScope.…` or `SwiftBeans.BeanScope.…`. Any other expression fails the build (it cannot be evaluated at build time).
 6. **Providers from local packages must be public.** A `@Service` declared in a local package target must be `public` / `open` with a `public` selected initializer (a memberwise initializer is never public); a `@Bean` must be `public static` in a `public` configuration type. Otherwise the build fails at that declaration, since the app's generated code cannot call it.
+7. **Collection parameters.** A `[E]` parameter with no `[E]` provider may be supplied by every bean that is an `E` (multi-bind); see `specs/collection-injection/SPEC.md`.
 
 #### Assisted providers
 
@@ -292,7 +293,7 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 
 ## Behavioral rules
 
-1. **Compile-time completeness:** If a required (non-defaulted, non-`@Assisted`) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph, the build fails with a diagnostic at that parameter.
+1. **Compile-time completeness:** If a required (non-defaulted, non-`@Assisted`) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph (or, for a collection parameter, by multi-bind; see `specs/collection-injection/SPEC.md`), the build fails with a diagnostic at that parameter.
 2. **No cycles:** Cyclic dependency graphs fail the build.
 3. **Duplicates:** Two providers for the same injectable key (normalized type; see Generator rules → Injectable keys) fail the build.
 4. **Plain types stay plain:** Prefer constructor injection. `@Service` types remain manually constructible in tests without the generated context.
@@ -657,6 +658,7 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Diagnostics | `file:line:column`, all errors per run, stable order; single-declaration misuse via macros (2026-10-15) |
 | Singleton creation | Factory runs at most once per context, even under concurrent first access (2026-10-15) |
 | Runtime arguments | `@Assisted` parameter wrapper; assisted providers become context methods, are always transient and not injectable (2026-10-15) |
+| Collection injection | `[E]` multi-binds every bean that is an `E` when no `[E]` bean exists; own spec `specs/collection-injection/SPEC.md` (2026-10-15) |
 
 ## Phase gate
 

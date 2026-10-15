@@ -170,6 +170,27 @@ enum KeyNormalization {
 		return nil
 	}
 
+	/// True for `[any P]` / `Array<any P>`: the consumer accepts zero or more implementations.
+	static func elementSpelledWithAny(_ type: TypeSyntax) -> Bool {
+		let type = strippingParentheses(type)
+		var element: TypeSyntax?
+		if let array = type.as(ArrayTypeSyntax.self) {
+			element = array.element
+		} else if let identifier = type.as(IdentifierTypeSyntax.self), identifier.name.text == "Array",
+		          let arguments = identifier.genericArgumentClause?.arguments, arguments.count == 1
+		{
+			element = arguments.first?.argument
+		}
+		guard let element else { return false }
+		return strippingParentheses(element).as(SomeOrAnyTypeSyntax.self)?.someOrAnySpecifier.tokenKind == .keyword(.any)
+	}
+
+	/// Parses `spelling` as a type, then checks `elementSpelledWithAny` (tests).
+	static func elementSpelledWithAny(forSpelling spelling: String) -> Bool {
+		var parser = Parser(spelling)
+		return elementSpelledWithAny(TypeSyntax.parse(from: &parser))
+	}
+
 	private static func normalize(_ type: TypeSyntax) throws(UnsupportedKey) -> TypeKey {
 		let type = strippingParentheses(type)
 		if let identifier = type.as(IdentifierTypeSyntax.self) {

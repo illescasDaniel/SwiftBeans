@@ -96,7 +96,10 @@ Suggested order: CI first, then factory injection, then qualifiers.
 	- Accessor = qualifier + type (`snakeCaseJSONDecoder`); collision with a real type's accessor is a build error at both declarations (no numeric suffixes: unstable, unreadable). Maybe later: `accessor:` override
 	- `@Qualifier` as a marker property wrapper on parameters (same trick as `@Assisted`); works with protocol-bound beans; `{Context}Protocol` gains qualified accessors
 	- Acceptance criterion: a graph without qualifiers generates byte-identical output to today
-- [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
+- [x] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins) — `specs/collection-injection/SPEC.md`, `ParameterInjection`, `GeneratorCollectionTests` (branch `cursor/collection-injection-53df`, 2026-10-15; spec approval still pending)
+- [x] Linux build: generator writes diagnostics via `FileHandle.standardError`; file-writer test tolerates coarse mtimes (2026-10-15)
+- [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
+- [ ] Example app: adopt collection injection (e.g. analytics trackers) as the generated-code compile check on macOS/iOS
 - [ ] Graph dump: plugin emits a Markdown/DOT file of the resolved graph for debugging and onboarding
 - [ ] Fix known limitation: a new file in a local package may need a clean build before it joins the graph
 - [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)
