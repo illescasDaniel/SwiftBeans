@@ -46,7 +46,12 @@ indirect enum TypeKey: Hashable, Sendable, Comparable, CustomStringConvertible {
 
 	/// SPEC accessor naming; Swift keywords come back escaped (`` `class` ``).
 	var accessorName: String {
-		let name = Self.lowercasingLeadingWord(namePieces.joined())
+		accessorName(prefix: "")
+	}
+
+	/// `prefix` then the name pieces, lowercased as one name: `snakeCase` + `JSONDecoder` → `snakeCaseJSONDecoder`.
+	func accessorName(prefix: String) -> String {
+		let name = Self.lowercasingLeadingWord(prefix + namePieces.joined())
 		return Self.keywords.contains(name) ? "`\(name)`" : name
 	}
 

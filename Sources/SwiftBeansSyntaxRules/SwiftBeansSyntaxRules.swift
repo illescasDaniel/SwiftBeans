@@ -54,6 +54,74 @@ public enum SwiftBeansSyntaxRules {
 		}
 	}
 
+	/// `Qualifier`, `SwiftBeans.Qualifier`; `@Other.Qualifier` → false.
+	public static func isQualifier(_ attribute: AttributeSyntax) -> Bool {
+		swiftBeansName(of: attribute) == "Qualifier"
+	}
+
+	/// The first `@Qualifier` / `@SwiftBeans.Qualifier` attribute in `attributes`, if any.
+	public static func qualifierAttribute(in attributes: AttributeListSyntax) -> AttributeSyntax? {
+		for case .attribute(let attribute) in attributes where isQualifier(attribute) {
+			return attribute
+		}
+		return nil
+	}
+
+	/// The name in `@Qualifier("snakeCase")`: exactly one unlabeled, identifier-shaped string literal.
+	public static func qualifierName(of attribute: AttributeSyntax) -> Result<String, Violation> {
+		guard let arguments = attribute.arguments?.as(LabeledExprListSyntax.self),
+		      arguments.count == 1, let argument = arguments.first, argument.label == nil
+		else {
+			return .failure(Violation(
+				id: "qualifier.missingName",
+				message: "@Qualifier takes one string literal name, e.g. @Qualifier(\"snakeCase\")",
+				node: Syntax(attribute)
+			))
+		}
+		return name(argument.expression, describedAs: "@Qualifier name")
+	}
+
+	/// The `named:` argument of `@Bean` / `@Service`: `nil` when absent, a violation when not a valid literal.
+	public static func named(of attribute: AttributeSyntax) -> Result<String?, Violation> {
+		guard let arguments = attribute.arguments?.as(LabeledExprListSyntax.self),
+		      let argument = arguments.first(where: { $0.label?.text == "named" })
+		else {
+			return .success(nil)
+		}
+		return name(argument.expression, describedAs: "named:").map(Optional.some)
+	}
+
+	/// A single-segment string literal whose contents can prefix an accessor name.
+	private static func name(_ expression: ExprSyntax, describedAs subject: String) -> Result<String, Violation> {
+		guard let literal = expression.as(StringLiteralExprSyntax.self),
+		      literal.segments.count <= 1,
+		      literal.segments.allSatisfy({ $0.is(StringSegmentSyntax.self) })
+		else {
+			return .failure(Violation(
+				id: "qualifier.notLiteral",
+				message: "\(subject) must be a string literal",
+				node: Syntax(expression)
+			))
+		}
+		let text = literal.segments.first?.as(StringSegmentSyntax.self)?.content.text ?? ""
+		guard isIdentifierShaped(text) else {
+			return .failure(Violation(
+				id: "qualifier.invalidName",
+				message: "qualifier name \"\(text)\" must start with a letter or '_' and contain only letters, digits and '_'",
+				node: Syntax(expression)
+			))
+		}
+		return .success(text)
+	}
+
+	/// ASCII `[A-Za-z_][A-Za-z0-9_]*`.
+	private static func isIdentifierShaped(_ text: String) -> Bool {
+		guard let first = text.unicodeScalars.first, first == "_" || (first.isASCII && first.properties.isAlphabetic) else {
+			return false
+		}
+		return text.unicodeScalars.allSatisfy { $0 == "_" || ($0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains($0))) }
+	}
+
 	/// The attribute's name when it is written bare or qualified with `SwiftBeans`.
 	private static func swiftBeansName(of attribute: AttributeSyntax) -> String? {
 		let type = attribute.attributeName
@@ -139,6 +207,9 @@ public enum SwiftBeansSyntaxRules {
 		if case .failure(let violation) = scope(of: attribute) {
 			violations.append(violation)
 		}
+		if case .failure(let violation) = named(of: attribute) {
+			violations.append(violation)
+		}
 		return violations
 	}
 
@@ -162,6 +233,9 @@ public enum SwiftBeansSyntaxRules {
 			violations.append(Violation(id: "service.generic", message: "@Service types cannot be generic", node: Syntax(generics)))
 		}
 		if case .failure(let violation) = scope(of: attribute) {
+			violations.append(violation)
+		}
+		if case .failure(let violation) = named(of: attribute) {
 			violations.append(violation)
 		}
 		return violations

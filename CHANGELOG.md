@@ -6,6 +6,7 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 ### Added
 
+- Qualifiers: `@Bean(named:)` / `@Service(named:)` and `@Qualifier("…")` so several beans of one type coexist; accessors are `name` + type (`snakeCaseJSONDecoder`). Graphs without qualifiers stay byte-identical.
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
 
 ## [0.1.0] - 2026-10-15

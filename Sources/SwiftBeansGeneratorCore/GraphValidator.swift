@@ -1,11 +1,11 @@
 /// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, assisted keys, cycles.
 ///
-/// Every check iterates providers sorted by `(key, location)`, never dictionary order.
+/// Keys are `(type, qualifier)`. Every check iterates providers sorted by `(key, location)`, never dictionary order.
 enum GraphValidator {
 	static func validate(_ providers: [BeanProvider]) -> [GeneratorDiagnostic] {
-		let providers = providers.sorted { ($0.key.description, $0.location) < ($1.key.description, $1.location) }
+		let providers = providers.sorted { ($0.key, $0.location) < ($1.key, $1.location) }
 		var diagnostics: [GeneratorDiagnostic] = []
-		var byKey: [TypeKey: [Int]] = [:]
+		var byKey: [BeanKey: [Int]] = [:]
 		for (index, provider) in providers.enumerated() {
 			byKey[provider.key, default: []].append(index)
 		}
@@ -18,25 +18,28 @@ enum GraphValidator {
 				diagnostics.append(GeneratorDiagnostic(
 					id: "graph.duplicateProvider",
 					location: providers[index].location,
-					message: "duplicate provider for '\(key)'; also provided by \(others)"
+					message: "duplicate provider for \(key.quoted); also provided by \(others)"
 				))
 			}
 		}
 
-		// 2. Accessor-name collisions between different keys.
-		var keysByAccessor: [String: [TypeKey]] = [:]
+		// 2. Accessor-name collisions between different keys (a qualified key is never renamed to avoid one).
+		var keysByAccessor: [String: [BeanKey]] = [:]
 		for key in byKey.keys.sorted() {
 			keysByAccessor[key.accessorName, default: []].append(key)
 		}
 		for accessor in keysByAccessor.keys.sorted() where keysByAccessor[accessor]!.count > 1 {
 			let keys = keysByAccessor[accessor]!
-			let names = keys.map { "'\($0)'" }.joined(separator: " and ")
+			let names = keys.map(\.quoted).joined(separator: " and ")
+			let fix = keys.contains { $0.qualifier != nil }
+				? "rename a qualifier or bind one of them to a different type"
+				: "bind one of them to a different type"
 			for key in keys {
 				for index in byKey[key]! {
 					diagnostics.append(GeneratorDiagnostic(
 						id: "graph.accessorCollision",
 						location: providers[index].location,
-						message: "accessor name '\(accessor)' is produced by both \(names); bind one of them to a different type"
+						message: "accessor name '\(accessor)' is produced by both \(names); \(fix)"
 					))
 				}
 			}
@@ -46,20 +49,38 @@ enum GraphValidator {
 		for provider in providers {
 			for parameter in provider.parameters {
 				guard let key = parameter.key, !parameter.hasDefault, byKey[key] == nil else { continue }
+				// An unqualified parameter never picks a named provider, even a single one.
+				let named = key.qualifier == nil ? providers.filter { $0.key.type == key.type } : []
+				if !named.isEmpty {
+					diagnostics.append(GeneratorDiagnostic(
+						id: "graph.missingDependency",
+						location: parameter.location,
+						message: "missing dependency \(key.quoted) required by '\(provider.displayName)'; only named providers exist, add @Qualifier(\"…\") to the parameter",
+						notes: named.map {
+							GeneratorDiagnostic(
+								severity: .note,
+								id: "graph.namedCandidate",
+								location: $0.location,
+								message: "use @Qualifier(\"\($0.key.qualifier!)\") for '\($0.displayName)'"
+							)
+						}
+					))
+					continue
+				}
 				let notes = providers
-					.filter { $0.key.lastComponentName != nil && $0.key.lastComponentName == key.lastComponentName }
+					.filter { $0.key.type.lastComponentName != nil && $0.key.type.lastComponentName == key.type.lastComponentName }
 					.map {
 						GeneratorDiagnostic(
 							severity: .note,
 							id: "graph.didYouMean",
 							location: $0.location,
-							message: "did you mean '\($0.key)' (provided by '\($0.displayName)')?"
+							message: "did you mean \($0.key.quoted) (provided by '\($0.displayName)')?"
 						)
 					}
 				diagnostics.append(GeneratorDiagnostic(
 					id: "graph.missingDependency",
 					location: parameter.location,
-					message: "missing dependency '\(key)' required by '\(provider.displayName)'",
+					message: "missing dependency \(key.quoted) required by '\(provider.displayName)'",
 					notes: notes
 				))
 			}
@@ -75,7 +96,7 @@ enum GraphValidator {
 				diagnostics.append(GeneratorDiagnostic(
 					id: "assisted.notInjectable",
 					location: parameter.location,
-					message: "'\(key)' takes runtime arguments and cannot be injected into '\(provider.displayName)'; call '\(selector)' on the context instead"
+					message: "\(key.quoted) takes runtime arguments and cannot be injected into '\(provider.displayName)'; call '\(selector)' on the context instead"
 				))
 			}
 		}
