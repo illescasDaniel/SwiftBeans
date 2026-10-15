@@ -15,8 +15,9 @@ struct GeneratedFileWriterTests {
 		try FileManager.default.setAttributes([.modificationDate: past], ofItemAtPath: file.path)
 
 		#expect(try GeneratedFileWriter.write("first", to: file) == false)
-		let unchangedDate = try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date
-		#expect(unchangedDate == past)
+		let unchangedDate = try #require(FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date)
+		// Some file systems round-trip timestamps with sub-microsecond loss.
+		#expect(abs(unchangedDate.timeIntervalSince(past)) < 0.001)
 
 		#expect(try GeneratedFileWriter.write("second", to: file))
 		#expect(try String(contentsOf: file, encoding: .utf8) == "second")

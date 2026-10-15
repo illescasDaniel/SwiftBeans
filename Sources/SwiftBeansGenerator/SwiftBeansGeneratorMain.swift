@@ -67,7 +67,7 @@ struct SwiftBeansGeneratorMain {
 
 		let result = SwiftBeansGeneration.generate(input: input)
 		for diagnostic in result.diagnostics {
-			fputs("\(diagnostic.rendered)\n", stderr)
+			printError(diagnostic.rendered)
 		}
 		guard let output = result.output else {
 			exit(1)
@@ -80,7 +80,12 @@ struct SwiftBeansGeneratorMain {
 	}
 
 	private static func fail(_ message: String) -> Never {
-		fputs("error: \(message)\n", stderr)
+		printError("error: \(message)")
 		exit(1)
+	}
+
+	/// Glibc's `stderr` is a mutable global, which strict concurrency rejects on Linux.
+	private static func printError(_ line: String) {
+		FileHandle.standardError.write(Data("\(line)\n".utf8))
 	}
 }
