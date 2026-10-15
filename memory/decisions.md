@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Child contexts (draft): compile-time tree, ARC lifetime, child sees parent via its protocol
+
+**Context:** Backlog item "child contexts" (logged-in-user scope created and destroyed at runtime). v1 spec deferred "Subcontexts" and "Context arguments".
+
+**Decision (proposed in `specs/child-contexts/SPEC.md`, pending approval):** `@ChildContext(of: Parent.self)` classes, each with its own `SwiftBeansRegistry`; beans are assigned with `in: Context.self` (default root, so existing output is byte-identical); the child holds its parent strongly as `any {Parent}Protocol` (fakes work); visibility is one-way (child sees parent, never the reverse, siblings isolated) and validated at build time; disposal is ARC deallocation with no explicit hooks in the MVP; context inputs (`@ContextInput`) are providers inside the child. Delivery: phase 0 root inputs, A single-level MVP, B factory/ergonomics, C nesting, D hooks/overrides.
+
+**Rationale:** Dagger/Needle-style compile-time subcomponents keep the no-runtime-locator rule; reusing the registry and the protocol existential needs no new runtime types and keeps tests/Previews possible with hand-written fakes; ARC teardown matches the "release child = release singletons" goal with the least API.
+
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 
 **Context:** First public release of the package on GitHub (`illescasDaniel/SwiftBeans`).

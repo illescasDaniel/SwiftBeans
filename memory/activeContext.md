@@ -4,20 +4,24 @@ _Last updated: 2026-10-15_
 
 ## Branch
 
-- `main`
+- `cursor/child-contexts-spec-53df` (from `main` @ `6b04703`)
 
 ## Current focus
 
-Review backlog cleared (2026-10-15): example-app fixes, product surface (`SwiftBeansGeneratorCore` no longer a product, `package` access), README written, `.claude` symlinks to `.cursor` skills/rules. All uncommitted; `@Assisted` is committed (`25e0b04`). Verified: `swift test` 133, example macOS tests, iOS Simulator and Release builds.
+Phase 1 SPEC for child contexts (logged-in-user scope created/destroyed at runtime). Spec-only branch: no generator or runtime changes.
 
 ## Just changed
 
-- Example: Swift 6 mode, `@State` view models, `LoadState`, throwing `ItemRepository`, `#if DEBUG` fakes and Previews, Release `URLSession.shared`
-- `Package.swift`: products are only `SwiftBeans` + `SwiftBeansPlugin`
-- `README.md` (new)
+- `specs/child-contexts/SPEC.md` (draft, awaiting approval): `@ChildContext(of:)`, `@ContextInput`, `in:` on `@Service`/`@Bean`/`@Configuration`, parent via `any {Parent}Protocol`, ARC disposal, BDD scenarios, phases 0/A/B/C/D
+- `specs/child-contexts/ARCHITECTURE.md`: proposed seams only, not approved
+- `memory/progress.md`, `memory/decisions.md` updated
+
+## Blockers
+
+- Needs human approval of the spec and answers to its open questions (ownership syntax, child protocol shape, inputs mechanism) before Phase 2.
 
 ## Next steps
 
-1. Commit this batch when asked
-2. Spec assisted-factory injection (`(Item) -> ItemDetailViewModel`) — Phase 1
-3. Optional: push `main`
+1. Review and approve (or amend) `specs/child-contexts/SPEC.md`
+2. Phase 2: contracts for the approved phase (suggest phase A, optionally phase 0 first)
+3. Other backlog: assisted-factory injection spec (the parent-side context factory in phase B depends on it)
