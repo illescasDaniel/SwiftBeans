@@ -1,5 +1,7 @@
 # SwiftBeans
 
+[![CI](https://github.com/illescasDaniel/SwiftBeans/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/illescasDaniel/SwiftBeans/actions/workflows/ci.yml)
+
 Spring-style dependency injection for Swift, wired at **compile time**.
 
 You annotate types and factories. A build tool plugin scans your target, checks the graph, and generates plain Swift accessors on your context. A missing, duplicate or cyclic dependency fails the build with a clickable `file:line:column` error. There is no runtime container and no `resolve(Type.self)`.

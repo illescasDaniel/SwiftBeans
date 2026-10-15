@@ -87,7 +87,7 @@
 
 Suggested order: CI first, then factory injection, then qualifiers.
 
-- [ ] CI: GitHub Action running `swift test` + example macOS and iOS Simulator builds; tagged releases (semver, stay `0.x` while the API may break) and a CHANGELOG
+- [x] CI: GitHub Action (`.github/workflows/ci.yml`, `xcode-27` runner, Xcode 27.0) running `swift test` + example macOS tests and iOS Simulator build; README badge; `CHANGELOG.md` (2026-10-15). Releases stay semver `0.x` while the API may break
 - [ ] Factory injection (same item as the backlog above): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
 - [ ] Qualifiers: `@Bean(named: "snakeCase")` / `@Service(named:)` + `@Qualifier("snakeCase") decoder: JSONDecoder`. Notes from the 2026-10-15 discussion:
 	- Key is (type, qualifier), not a global name: `snakeCase` on `JSONDecoder` and on `JSONEncoder` are different beans
