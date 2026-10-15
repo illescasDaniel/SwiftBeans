@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MyApp: App {
+struct SwiftBeansExampleApp: App {
 	@State private var coordinator: AppCoordinator
 
 	init() {

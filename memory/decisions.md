@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Plugin owns the scan set; resolver shared by byte-identical copy
+
+**Context:** Review found the plugin guessed a source root from `MyApp.swift` / `Assets.xcassets`, could drop target files, searched parent folders for `.swiftbeans.yml`, and never declared local package sources as inputs (stale wiring). A probe on Xcode 27.0 showed `XcodeTarget.inputFiles` already lists every Swift file in nested synchronized-group subfolders.
+
+**Decision:** Plugin takes sources only from the build system, reads `.swiftbeans.yml` only at the package / `.xcodeproj` folder, resolves local package sources itself and declares them plus the config as inputs; the generator just receives an explicit file list (no `--config`, no search). Config parsing + resolution live in one Foundation-only file kept byte-identical in GeneratorCore (tested) and the plugin, with a test guarding drift. `SwiftBeansScanConfiguration` leaves the runtime library.
+
+**Rationale:** Plugins cannot link library targets, and inputs must be known at planning time, so the plugin must do resolution. A copy + drift test is safer than symlinks.
+
 ## 2026-10-14 — Generated `{Context}Protocol` + user-owned fakes
 
 **Context:** The example hand-maintained `AppContaining` mirroring generated accessors so navigation/tests could inject stubs. Previews also needed mock graphs without production `AppContext`.

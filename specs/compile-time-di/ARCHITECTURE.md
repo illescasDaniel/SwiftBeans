@@ -30,10 +30,11 @@ flowchart LR
 
 | Target | Kind | Responsibility |
 |--------|------|----------------|
-| `SwiftBeans` | library product | Public types (`BeanScope`, scan config), macro *declarations* (`#externalMacro`), re-exports for consumers |
+| `SwiftBeans` | library product | Public types (`BeanScope`), macro *declarations* (`#externalMacro`), `SwiftBeansRegistry` |
 | `SwiftBeansMacros` | `.macro` | Expand attached macros: local validation + minimal surface (no cross-file discovery) |
-| `SwiftBeansGenerator` | executable | Parse scanned Swift sources + YAML; build IR graph; emit `SwiftBeansGenerated.swift`; emit diagnostics on failure |
-| `SwiftBeansPlugin` | build tool plugin | Wire generator into the consumer build; pass target sources + resolved YAML paths |
+| `SwiftBeansGenerator` | executable | Parse the Swift files it is given; build IR graph; emit `SwiftBeansGenerated.swift`; emit diagnostics on failure. **Does not read `.swiftbeans.yml` or search for files.** |
+| `SwiftBeansPlugin` | build tool plugin | Own the scan set: read the build system's file list and `.swiftbeans.yml`, resolve local package sources, declare all of them as inputs, invoke the generator with the explicit file list |
+| `SwiftBeansGeneratorCore` | internal library (tests + generator) | Graph IR, parser, validator, codegen, and the scan-set resolver source of truth (see [Scan-set resolution](#scan-set-resolution)) |
 | `SwiftBeansTests` | tests | BDD scenarios against fixtures that apply the plugin (Phase 3+) |
 | `SwiftBeansMacrosTests` | tests | Macro expansion unit tests via SwiftSyntax |
 
@@ -68,7 +69,7 @@ Default when omitted on `@Service` / `@Bean`: `.singleton`.
 
 ### Scan config — file `.swiftbeans.yml`
 
-Resolved relative to the consumer project / package root (generator searches upward from the target’s sources or receives an explicit path from the plugin).
+Read **only** from the scan root: `PluginContext.package.directoryURL` (SPM) or `XcodePluginContext.xcodeProject.directoryURL` (Xcode, the folder containing the `.xcodeproj`). No upward search by the plugin or the generator.
 
 ```yaml
 # .swiftbeans.yml
@@ -78,22 +79,25 @@ local_packages:
       - Networking
 ```
 
-Codable model (library + generator share the schema):
+Model (Foundation-only; lives with the resolver, **not** in the `SwiftBeans` runtime library, which consumers link into their apps):
 
 ```swift
-public struct SwiftBeansScanConfiguration: Codable, Sendable, Equatable {
-	public var localPackages: [LocalPackage]
+struct SwiftBeansScanConfiguration: Equatable, Sendable {
+	var localPackages: [LocalPackage]
 
-	public struct LocalPackage: Codable, Sendable, Equatable {
-		public var path: String
-		public var targets: [String]
+	struct LocalPackage: Equatable, Sendable {
+		var path: String
+		var targets: [String]
+		var line: Int // 1-based line of the `- path:` entry, for diagnostics
 	}
 }
 ```
 
-YAML keys use `local_packages` / `path` / `targets` (snake_case in file; `CodingKeys` map to camelCase in Swift).
+YAML keys use `local_packages` / `path` / `targets`. Accepted syntax: block lists, optional single or double quotes around scalars, `#` comments outside quotes, `local_packages: []`. Anything else is a `ScanConfigurationError` with a line number.
 
 Empty or missing file ⇒ scan only the plugin-attached target’s sources.
+
+`public struct SwiftBeansScanConfiguration` is **removed** from the `SwiftBeans` library (pre-1.0, no published release). It was never used at runtime.
 
 ### Macro declaration surface (signatures)
 
@@ -184,16 +188,85 @@ Rationale: a library package must work off the main actor and on Linux CI; forci
 
 ## Plugin invocation contract
 
-1. Plugin runs on the consumer target.
-2. Inputs: target Swift sources; optional `.swiftbeans.yml`; additional source roots from `local_packages`.
-3. Output: one generated Swift file in the plugin work directory, compiled into the target.
-4. Non-zero generator exit + stderr diagnostics ⇒ build failure (missing/duplicate/cycle).
+Revised 2026-10-15 for SPEC → *Source discovery*.
+
+### Responsibilities
+
+| Step | Owner |
+|------|-------|
+| List target sources | Plugin — SPM: `SourceModuleTarget.sourceFiles(withSuffix: "swift")`; Xcode: `XcodeTarget.inputFiles` filtered to `.source` + `.swift` |
+| Locate `.swiftbeans.yml` | Plugin — scan root only (see above) |
+| Parse config + resolve local package sources | Plugin, via the shared resolver |
+| Declare build inputs | Plugin — target sources ∪ local package sources ∪ config file (when present) |
+| Parse sources, validate graph, write output | Generator |
+
+No folder walking of the target, no source-root inference, no file-name markers. `expandedSwiftSources`, `inferSourceRoot`, `findConfig` (plugin) and `findConfiguration` / `--config` (generator) are deleted.
+
+**Verified 2026-10-15 (Xcode 27.0, 27A266a):** for the example app's `PBXFileSystemSynchronizedRootGroup`, `XcodeTarget.inputFiles` lists every Swift file in nested subfolders (`Data/`, `DI/`, `Domain/`, `Navigation/`, `Presentation/`) as `.source`, and `xcodeProject.directoryURL` is `Examples/SwiftBeansExample`. The old recursive rescan is not needed. (The old heuristic only ever ran because `inputFiles.first` sat in a subfolder.)
+
+### Generator CLI
+
+```
+SwiftBeansGenerator --output <file> <source.swift>...
+```
+
+- Sources are taken as given; the generator de-duplicates by resolved path and sorts them (SPEC rule 6).
+- Exit code ≠ 0 + `error: …` on stderr ⇒ build failure (missing / duplicate / cycle).
+
+### Scan-set resolution
+
+A single Foundation-only Swift file, `ScanSetResolution.swift`, holds:
+
+```swift
+enum ScanConfigurationParser {
+	static func parse(_ text: String) throws(ScanConfigurationError) -> SwiftBeansScanConfiguration
+}
+
+enum ScanSetResolver {
+	/// Resolves `local_packages` to sorted, de-duplicated `.swift` files.
+	/// Paths are relative to `configDirectory`, standardized and symlink-resolved.
+	static func localPackageSources(
+		for configuration: SwiftBeansScanConfiguration,
+		configDirectory: URL,
+		fileManager: FileManager = .default
+	) throws(ScanConfigurationError) -> [URL]
+}
+
+struct ScanConfigurationError: Error, CustomStringConvertible {
+	enum Kind: Equatable { case unreadable, syntax, missingPackage, notAPackage, missingTarget }
+	var kind: Kind
+	var line: Int?      // in the config file
+	var message: String // names the entry, e.g. "local_packages[1] path 'Packages/Net': no Package.swift"
+}
+```
+
+Why one file shared by copy: build tool plugins cannot depend on library targets, and the plugin must know the full file list at planning time to declare it as inputs (a separate "resolve" build step cannot add inputs to a later step). So:
+
+- **Canonical copy:** `Sources/SwiftBeansGeneratorCore/ScanSetResolution.swift` (unit-tested).
+- **Plugin copy:** `Plugins/SwiftBeansPlugin/ScanSetResolution.swift`, byte-identical.
+- **Drift guard:** a `SwiftBeansGeneratorCoreTests` test reads both files via `#filePath` and fails if they differ.
+
+Symlinks were rejected because the example already relies on them and they break on some checkouts.
+
+### Errors
+
+On a `ScanConfigurationError` the plugin emits `Diagnostics.error(message, file: <config path>, line:)` and returns no build commands, so the build fails with a clickable diagnostic on the config entry. It does not also rethrow (that duplicates the message). It never skips an entry silently.
+
+### Plugin shape
+
+`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommand(...)` that resolves the config, builds the argument list and returns the single `.buildCommand`.
+
+### Known limitation
+
+Neither SPM nor Xcode re-plans plugins when an *undeclared* file appears, so a new `.swift` file in a local package (or a newly created `.swiftbeans.yml`) may need a re-plan / clean build to join the graph (SPEC → Known limitations).
 
 ## Testing seams (Phase 3 preview)
 
 | Suite | What |
 |-------|------|
-| `SwiftBeansTests` | Scope enum / YAML decode; later fixture targets with plugin if SPM allows |
+| `SwiftBeansTests` | Scope enum, registry |
+| `SwiftBeansGeneratorCoreTests` | Config parser (quotes, comments, errors with line numbers), resolver against temp folders (missing package, no `Package.swift`, missing `Sources/<target>`, `..` / symlink normalization, sort + dedupe), plugin-copy drift guard |
+| Example app (manual) | SPEC *Source discovery* scenarios that need a real build system: nested folders with a renamed `@main` file, non-member file, parent-folder config, regeneration on edit |
 | `SwiftBeansMacrosTests` | Expansion + static-`@Bean` diagnostics |
 | Generator unit tests | IR build + cycle/missing/duplicate on in-memory source strings (no full Xcode) |
 
@@ -210,3 +283,5 @@ Runtime service locator, property injection, qualifiers, subcontexts, non-static
 ## Phase gate
 
 Phase 2 approved 2026-10-14. Proceed to Phase 3 (tests); scaffolding macro/plugin targets in `Package.swift` is allowed as needed for compiling tests.
+
+**Source discovery revision (2026-10-15):** Phases 2–4 done. Config errors are reported with `Diagnostics.error` alone (no rethrow): SPM and Xcode both fail the build on it, and rethrowing printed every message twice.

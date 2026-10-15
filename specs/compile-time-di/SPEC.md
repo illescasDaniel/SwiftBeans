@@ -115,11 +115,9 @@ Request/session scopes, property injection (`@Autowired` on stored properties), 
 ### Multi-module / scan boundary
 
 - Plugin always scans **the target it is applied to**.
-- Additional local packages / targets that should participate in the graph are declared in a **YAML config file** (name TBD in Phase 2; e.g. `.swiftbeans.yml` at the app or package root). This supports **Xcode iOS apps that have no `Package.swift`**, while SPM packages can use the same file.
+- Additional local packages / targets that should participate in the graph are declared in a **YAML config file**, `.swiftbeans.yml`, at the package or project root. This supports **Xcode iOS apps that have no `Package.swift`**, while SPM packages can use the same file.
 - Types in dependencies that are not scanned must be provided via `@Bean` in a `@Configuration`.
 - Consumers attach the SwiftBeans build plugin to the app/root target that owns the `@ApplicationContext` (and any target that needs generated wiring).
-
-Example shape (illustrative; exact schema in Phase 2):
 
 ```yaml
 # .swiftbeans.yml
@@ -127,10 +125,23 @@ local_packages:
   - path: Packages/Networking
     targets:
       - Networking
-  - path: Packages/FeatureHome
+  - path: "Packages/FeatureHome"   # quotes optional
     targets:
       - FeatureHome
 ```
+
+### Source discovery
+
+The scan set is defined by the build system and the config file, never by guessing from folder contents.
+
+1. **Target sources come from the build system.** The plugin scans exactly the Swift files the build system reports as the target's compiled sources (SPM: the source target's source files; Xcode: the target's input files). It does not walk folders, infer a "source root", or look for specific file names (e.g. an `App` entry file or `Assets.xcassets`). Files on disk that are not members of the target (excluded files, other targets' files, test sources in the same folder) are never scanned.
+2. **One config location, no upward search.** The config file is looked up only at the root of the package (SPM) or the folder containing the `.xcodeproj` (Xcode). The plugin passes its path to the generator explicitly. Neither the plugin nor the generator searches parent folders. A `.swiftbeans.yml` above that root (e.g. in `~` or an enclosing repo) has no effect. If the config file is absent, only the target's own sources are scanned.
+3. **Local package sources are resolved from `Sources/<target>`.** Each `local_packages` entry's `path` is resolved relative to the folder containing the config file and normalized (`..` and symlinks resolved). The path must be a folder containing a `Package.swift`, and each listed target must have a `Sources/<target>/` folder; all `.swift` files under it (recursively) are scanned. Packages whose targets use a custom `path:` in their manifest are out of scope for v1.
+4. **Every scanned file is a declared build input.** The target sources, every resolved local package source, and the config file itself are declared as inputs of the generation step, so editing any of them regenerates the wiring on the next build. (Adding a *new* file to a local package is picked up when the build system re-plans the plugin; see Known limitations.)
+5. **Config mistakes fail the build.** A config that cannot be read, a `local_packages` path that does not exist or has no `Package.swift`, a missing `Sources/<target>/` folder, or YAML outside the documented schema (block lists of `path` / `targets`, optional single or double quotes, `#` comments) fails the build with a diagnostic naming the config file and the offending entry. Nothing is skipped silently.
+6. **Stable scan order.** The scan set is de-duplicated by resolved path and sorted before parsing, so generated output does not depend on the order the build system lists files.
+
+**Known limitations (v1):** a new `.swift` file added to a local package may need a clean build or project re-plan in Xcode before it joins the graph, because build plugins cannot watch folders.
 
 ## Behavioral rules
 
@@ -222,6 +233,53 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 **When** the app builds  
 **Then** that `@Service` is part of the graph and resolvable from the root
 
+### Scenario: Nested folders are scanned without naming conventions
+
+**Given** a target whose `@main` entry file has any name (no `MyApp.swift`) and no asset catalog  
+**And** `@Service` types in nested subfolders of the target (e.g. `Domain/`, `Data/Remote/`)  
+**When** the target builds  
+**Then** every one of those services is in the graph and resolvable from the root
+
+### Scenario: Files outside the target are not scanned
+
+**Given** a `.swift` file inside the target's folder that is not a member of the target  
+**And** that file declares a `@Service` with the same key as one in the target  
+**When** the target builds  
+**Then** the build succeeds without a duplicate-provider diagnostic  
+**And** the graph contains only the target's provider
+
+### Scenario: Config above the project root is ignored
+
+**Given** no `.swiftbeans.yml` at the package / project root  
+**And** a `.swiftbeans.yml` in a parent folder that lists a local package  
+**When** the target builds  
+**Then** only the target's own sources are scanned
+
+### Scenario: Editing a local package source regenerates the wiring
+
+**Given** a `.swiftbeans.yml` listing a local package target with `@Service final class Greeter { init() }`  
+**And** the app has built once  
+**When** `Greeter`'s initializer gains a dependency provided by the graph and the app builds again  
+**Then** the generator runs again and the generated accessor passes the new dependency
+
+### Scenario: Editing the config regenerates the wiring
+
+**Given** an app that has built once  
+**When** a local package target is added to `.swiftbeans.yml` and the app builds again  
+**Then** that target's `@Service` types join the graph
+
+### Scenario: Invalid local package entry fails the build
+
+**Given** a `.swiftbeans.yml` whose `local_packages` entry points to a missing folder, a folder without `Package.swift`, or a target without `Sources/<target>/`  
+**When** the target builds  
+**Then** the build fails with a diagnostic naming the config file and that entry
+
+### Scenario: Quoted config values
+
+**Given** a `.swiftbeans.yml` with `path: "Packages/Networking"` and a quoted target name  
+**When** the configuration is loaded  
+**Then** the path and target name are read without the quotes
+
 ### Scenario: Generated context protocol
 
 **Given** an `@ApplicationContext` type named `AppContext`  
@@ -257,6 +315,7 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Root attribute | `@ApplicationContext` (compile-time root; not a runtime map) |
 | `@Service` shape | Attribute-only for the scanner; no required protocol conformance |
 | Multi-module scan | YAML config (supports Xcode apps without `Package.swift`) |
+| Source discovery | Build-system file list + `.swiftbeans.yml` at the package/project root only; no folder heuristics or upward search (2026-10-15) |
 | `@Bean` methods | Must be `static` |
 | Named qualifiers | Deferred (no v1 BDD requirement) |
 | Context protocol name | `{ContextTypeName}Protocol` (e.g. `AppContextProtocol`); fakes are user-owned |

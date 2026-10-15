@@ -14,7 +14,7 @@ Multiplatform SwiftUI app (iOS + macOS) wired for local development:
 - Coordinator navigation + MVVM over JSONPlaceholder posts:
 
 ```text
-MyApp
+SwiftBeansExampleApp
   └─ AppRootView(coordinator)
        └─ NavigationStack
             ├─ ItemListView (posts)

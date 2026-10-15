@@ -1,4 +1,4 @@
 // SwiftBeans — compile-time Spring-style dependency injection.
 //
-// Phase 2 contracts live in this module (`BeanScope`, `SwiftBeansScanConfiguration`).
-// Macro declarations, generator, and build plugin are added after architecture approval.
+// Runtime surface: `BeanScope`, `SwiftBeansRegistry`, and the macro declarations in `Macros.swift`.
+// Discovery and wiring are generated at build time by `SwiftBeansPlugin` / `SwiftBeansGenerator`.

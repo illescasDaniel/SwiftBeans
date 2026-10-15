@@ -54,7 +54,14 @@
 
 - [x] Generate `{Context}Protocol` (e.g. `AppContextProtocol`) + example `FakeAppContext` / Previews / tests
 
+### Done (continued)
+
+- [x] Project review (2026-10-15); plugin source-discovery fix (review #1–4): SPEC, ARCHITECTURE, tests, implementation, example rename
+
 ### Open
+
+- [ ] Generator: beans from local packages need the app to `import` that module somewhere, because generated imports only copy imports seen in scanned files (found 2026-10-15 in SPM fixture)
+- [ ] Review #5–10 (type keys, accessor names, file:line diagnostics) and #15 (registry once-only creation)
 
 - [ ] Push `main` when ready (optional)
 - [ ] Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / FakeAppContext pattern)

@@ -1,0 +1,284 @@
+// Scan-set resolution for `.swiftbeans.yml`.
+//
+// Foundation-only and byte-identical in two places:
+// - Sources/SwiftBeansGeneratorCore/ScanSetResolution.swift (canonical, unit-tested)
+// - Plugins/SwiftBeansPlugin/ScanSetResolution.swift (build tool plugins cannot link library targets)
+// `ScanSetResolutionDriftTests` fails if the copies differ. Edit one, copy it over the other.
+
+import Foundation
+
+/// Contents of a `.swiftbeans.yml` scan configuration file.
+struct SwiftBeansScanConfiguration: Equatable, Sendable {
+	var localPackages: [LocalPackage]
+
+	init(localPackages: [LocalPackage] = []) {
+		self.localPackages = localPackages
+	}
+
+	struct LocalPackage: Equatable, Sendable {
+		/// Package folder, relative to the folder containing the config file.
+		var path: String
+		/// Target names whose `Sources/<target>/` folders are scanned.
+		var targets: [String]
+		/// 1-based line of the `- path:` entry, for diagnostics.
+		var line: Int
+	}
+}
+
+struct ScanConfigurationError: Error, CustomStringConvertible {
+	enum Kind: Equatable, Sendable {
+		case unreadable
+		case syntax
+		case missingPackage
+		case notAPackage
+		case missingTarget
+	}
+
+	var kind: Kind
+	/// 1-based line in the config file, when known.
+	var line: Int?
+	/// Names the offending entry, e.g. `local_packages path 'Packages/Net': no Package.swift`.
+	var message: String
+
+	var description: String { message }
+}
+
+enum ScanConfigurationParser {
+	/// Reads and parses a `.swiftbeans.yml` file.
+	static func load(contentsOf url: URL) throws(ScanConfigurationError) -> SwiftBeansScanConfiguration {
+		let data: Data
+		do {
+			data = try Data(contentsOf: url)
+		} catch {
+			throw ScanConfigurationError(kind: .unreadable, line: nil, message: "cannot read \(url.path): \(error.localizedDescription)")
+		}
+		guard let text = String(data: data, encoding: .utf8) else {
+			throw ScanConfigurationError(kind: .unreadable, line: nil, message: "\(url.path) is not valid UTF-8")
+		}
+		return try parse(text)
+	}
+
+	/// Parses the documented `.swiftbeans.yml` schema (block lists, optional quotes, `#` comments).
+	///
+	/// ```yaml
+	/// local_packages:
+	///   - path: Packages/Networking
+	///     targets:
+	///       - Networking
+	/// ```
+	static func parse(_ text: String) throws(ScanConfigurationError) -> SwiftBeansScanConfiguration {
+		var packages: [SwiftBeansScanConfiguration.LocalPackage] = []
+		var inLocalPackages = false
+		var current: SwiftBeansScanConfiguration.LocalPackage?
+		var entryIndent = 0
+		var inTargets = false
+
+		func finishEntry() throws(ScanConfigurationError) {
+			guard let entry = current else { return }
+			guard !entry.targets.isEmpty else {
+				throw syntaxError(entry.line, "local_packages path '\(entry.path)' has no targets")
+			}
+			packages.append(entry)
+			current = nil
+			inTargets = false
+		}
+
+		// `isNewline` also splits on "\r\n", which Swift treats as a single `Character`.
+		let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+		for (index, rawLine) in lines.enumerated() {
+			let lineNumber = index + 1
+			let line = stripComment(String(rawLine))
+			let content = line.trimmingCharacters(in: .whitespaces)
+			if content.isEmpty { continue }
+
+			let leading = line.prefix { $0 == " " || $0 == "\t" }
+			if leading.contains("\t") {
+				throw syntaxError(lineNumber, "tabs are not allowed for indentation")
+			}
+			let indent = leading.count
+
+			if content.hasPrefix("-") {
+				guard inLocalPackages else {
+					throw syntaxError(lineNumber, "unexpected list item outside local_packages")
+				}
+				let item = content.dropFirst().trimmingCharacters(in: .whitespaces)
+				if inTargets, let entry = current, indent > entryIndent {
+					guard let target = try scalar(item, line: lineNumber) else {
+						throw syntaxError(lineNumber, "empty target name")
+					}
+					current = SwiftBeansScanConfiguration.LocalPackage(
+						path: entry.path,
+						targets: entry.targets + [target],
+						line: entry.line
+					)
+					continue
+				}
+				if current != nil, indent != entryIndent {
+					throw syntaxError(lineNumber, "unexpected indentation")
+				}
+				try finishEntry()
+				let (key, value) = try keyValue(item, line: lineNumber)
+				guard key == "path" else {
+					throw syntaxError(lineNumber, "each local_packages entry must start with 'path:'")
+				}
+				guard let path = try scalar(value, line: lineNumber) else {
+					throw syntaxError(lineNumber, "empty path")
+				}
+				current = SwiftBeansScanConfiguration.LocalPackage(path: path, targets: [], line: lineNumber)
+				entryIndent = indent
+				continue
+			}
+
+			if indent == 0 {
+				try finishEntry()
+				let (key, value) = try keyValue(content, line: lineNumber)
+				guard key == "local_packages" else {
+					throw syntaxError(lineNumber, "unknown key '\(key)'")
+				}
+				switch value {
+				case "":
+					inLocalPackages = true
+				case "[]":
+					inLocalPackages = false
+				default:
+					throw syntaxError(lineNumber, "local_packages must be a block list")
+				}
+				continue
+			}
+
+			guard current != nil, indent > entryIndent else {
+				throw syntaxError(lineNumber, "unexpected indentation")
+			}
+			let (key, value) = try keyValue(content, line: lineNumber)
+			switch key {
+			case "targets":
+				guard value.isEmpty else {
+					throw syntaxError(lineNumber, "targets must be a block list ('- Name' on the following lines)")
+				}
+				inTargets = true
+			default:
+				throw syntaxError(lineNumber, "unknown key '\(key)' in local_packages entry")
+			}
+		}
+		try finishEntry()
+		return SwiftBeansScanConfiguration(localPackages: packages)
+	}
+
+	/// Removes a `#` comment that starts the line or follows whitespace, outside quotes.
+	private static func stripComment(_ line: String) -> String {
+		var quote: Character?
+		var previous: Character = " "
+		for index in line.indices {
+			let character = line[index]
+			if let open = quote {
+				if character == open { quote = nil }
+			} else if character == "\"" || character == "'" {
+				quote = character
+			} else if character == "#", previous == " " || previous == "\t" {
+				return String(line[..<index])
+			}
+			previous = character
+		}
+		return line
+	}
+
+	private static func keyValue(_ text: String, line: Int) throws(ScanConfigurationError) -> (String, String) {
+		guard let colon = text.firstIndex(of: ":") else {
+			throw syntaxError(line, "expected 'key: value'")
+		}
+		let key = text[..<colon].trimmingCharacters(in: .whitespaces)
+		let value = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+		return (key, value)
+	}
+
+	/// Returns the unquoted scalar, or `nil` when empty.
+	private static func scalar(_ text: String, line: Int) throws(ScanConfigurationError) -> String? {
+		let trimmed = text.trimmingCharacters(in: .whitespaces)
+		guard let first = trimmed.first else { return nil }
+		if first == "\"" || first == "'" {
+			guard trimmed.count >= 2, trimmed.last == first else {
+				throw syntaxError(line, "unterminated quote")
+			}
+			let inner = String(trimmed.dropFirst().dropLast())
+			return inner.isEmpty ? nil : inner
+		}
+		if first == "[" || first == "{" {
+			throw syntaxError(line, "inline lists and maps are not supported")
+		}
+		return trimmed
+	}
+
+	private static func syntaxError(_ line: Int, _ message: String) -> ScanConfigurationError {
+		ScanConfigurationError(kind: .syntax, line: line, message: message)
+	}
+}
+
+enum ScanSetResolver {
+	/// Resolves `local_packages` to sorted, de-duplicated `.swift` files.
+	/// Paths are relative to `configDirectory`, standardized and symlink-resolved.
+	static func localPackageSources(
+		for configuration: SwiftBeansScanConfiguration,
+		configDirectory: URL,
+		fileManager: FileManager = .default
+	) throws(ScanConfigurationError) -> [URL] {
+		var filesByPath: [String: URL] = [:]
+		for package in configuration.localPackages {
+			let packageRoot = configDirectory
+				.appending(path: package.path, directoryHint: .isDirectory)
+				.standardizedFileURL
+				.resolvingSymlinksInPath()
+			let entry = "local_packages path '\(package.path)'"
+			guard isDirectory(packageRoot, fileManager) else {
+				throw ScanConfigurationError(
+					kind: .missingPackage,
+					line: package.line,
+					message: "\(entry): folder not found at \(packageRoot.path)"
+				)
+			}
+			guard fileManager.fileExists(atPath: packageRoot.appending(path: "Package.swift").path) else {
+				throw ScanConfigurationError(
+					kind: .notAPackage,
+					line: package.line,
+					message: "\(entry): no Package.swift in \(packageRoot.path)"
+				)
+			}
+			for target in package.targets {
+				let sourcesRoot = packageRoot.appending(path: "Sources/\(target)", directoryHint: .isDirectory)
+				guard isDirectory(sourcesRoot, fileManager) else {
+					throw ScanConfigurationError(
+						kind: .missingTarget,
+						line: package.line,
+						message: "\(entry) target '\(target)': no Sources/\(target) folder in \(packageRoot.path)"
+					)
+				}
+				for file in swiftFiles(in: sourcesRoot, fileManager) {
+					filesByPath[file.path] = file
+				}
+			}
+		}
+		return filesByPath.keys.sorted().compactMap { filesByPath[$0] }
+	}
+
+	private static func isDirectory(_ url: URL, _ fileManager: FileManager) -> Bool {
+		var isDirectory: ObjCBool = false
+		return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+	}
+
+	private static func swiftFiles(in directory: URL, _ fileManager: FileManager) -> [URL] {
+		guard let enumerator = fileManager.enumerator(
+			at: directory,
+			includingPropertiesForKeys: [.isRegularFileKey],
+			options: [.skipsHiddenFiles]
+		) else {
+			return []
+		}
+		var files: [URL] = []
+		for case let url as URL in enumerator where url.pathExtension == "swift" {
+			guard (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+				continue
+			}
+			files.append(url.standardizedFileURL.resolvingSymlinksInPath())
+		}
+		return files
+	}
+}
