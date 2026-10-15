@@ -1,2 +1,7 @@
-# Optional multi-module scan list (empty for this single-target example).
-local_packages: []
+# Local package targets whose beans join this app's graph.
+# Only GreetingKitLive provides beans; the app never imports it, so the
+# generated file must add `import GreetingKitLive` itself.
+local_packages:
+  - path: Packages/GreetingKit
+    targets:
+      - GreetingKitLive

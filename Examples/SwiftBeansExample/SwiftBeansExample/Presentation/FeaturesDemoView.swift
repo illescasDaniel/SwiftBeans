@@ -48,6 +48,13 @@ struct FeaturesDemoView: View {
 				}
 			}
 
+			Section("Generator coverage") {
+				Text(container.featuresWelcomeBanner.message)
+				Text("Nested `Features.WelcomeBanner` ← `any Greeter` from local package `GreetingKitLive` (auto-imported) + `TagSummary` (`@Inject` init taking `Dictionary<String, Int>` from a `[String: Int]` `@Bean`).")
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+			}
+
 			Section("HTTIES request") {
 				if viewModel.isLoading {
 					ProgressView()

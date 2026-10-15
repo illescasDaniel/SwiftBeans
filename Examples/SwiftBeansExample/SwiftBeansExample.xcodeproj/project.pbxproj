@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		65E1D527307F8D36004D0768 /* SwiftBeans in Frameworks */ = {isa = PBXBuildFile; productRef = 65E1D526307F8D36004D0768 /* SwiftBeans */; };
 		A1HTTP010000000000000001 /* HTTIES in Frameworks */ = {isa = PBXBuildFile; productRef = A1HTTP020000000000000001 /* HTTIES */; };
+		A1GKIT010000000000000001 /* GreetingKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1GKIT020000000000000001 /* GreetingKit */; };
+		A1GKIT010000000000000002 /* GreetingKitLive in Frameworks */ = {isa = PBXBuildFile; productRef = A1GKIT020000000000000002 /* GreetingKitLive */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,6 +47,8 @@
 			files = (
 				65E1D527307F8D36004D0768 /* SwiftBeans in Frameworks */,
 				A1HTTP010000000000000001 /* HTTIES in Frameworks */,
+				A1GKIT010000000000000001 /* GreetingKit in Frameworks */,
+				A1GKIT010000000000000002 /* GreetingKitLive in Frameworks */,
 			);
 		};
 		A1FRAM010000000000000001 /* Frameworks */ = {
@@ -96,6 +100,8 @@
 			packageProductDependencies = (
 				65E1D526307F8D36004D0768 /* SwiftBeans */,
 				A1HTTP020000000000000001 /* HTTIES */,
+				A1GKIT020000000000000001 /* GreetingKit */,
+				A1GKIT020000000000000002 /* GreetingKitLive */,
 			);
 			productName = SwiftBeansExample;
 			productReference = 000000000000000000000120 /* SwiftBeansExample.app */;
@@ -153,6 +159,7 @@
 			packageReferences = (
 				65E1D525307F8D36004D0768 /* XCLocalSwiftPackageReference "Packages/SwiftBeans" */,
 				A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */,
+				A1GKIT030000000000000001 /* XCLocalSwiftPackageReference "Packages/GreetingKit" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
@@ -508,6 +515,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/SwiftBeans;
 		};
+		A1GKIT030000000000000001 /* XCLocalSwiftPackageReference "Packages/GreetingKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/GreetingKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -536,6 +547,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */;
 			productName = HTTIES;
+		};
+		A1GKIT020000000000000001 /* GreetingKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1GKIT030000000000000001 /* XCLocalSwiftPackageReference "Packages/GreetingKit" */;
+			productName = GreetingKit;
+		};
+		A1GKIT020000000000000002 /* GreetingKitLive */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1GKIT030000000000000001 /* XCLocalSwiftPackageReference "Packages/GreetingKit" */;
+			productName = GreetingKitLive;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

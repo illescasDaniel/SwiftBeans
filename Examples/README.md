@@ -7,6 +7,7 @@ Path: `Examples/SwiftBeansExample/`
 Multiplatform SwiftUI app (iOS + macOS) wired for local development:
 
 - Local package: `Packages/SwiftBeans/` — symlinks to this repo’s `Package.swift` / `Sources` / `Plugins` / `Tests`
+- Local package: `Packages/GreetingKit/` — `GreetingKit` (protocol `Greeter`) + `GreetingKitLive` (`public @Service`), listed in `.swiftbeans.yml`; the app never imports `GreetingKitLive`, the generated file does
 - Remote package: [HTTIES](https://github.com/illescasDaniel/HTTIES) (JSON HTTP client)
 - Build tool plugin: `SwiftBeansPlugin`
 - Shared scheme: `SwiftBeansExample` (My Mac + iOS Simulator)
@@ -29,6 +30,12 @@ SwiftBeansExampleApp
 @Service(boundTo: ItemRepository.self) JSONPlaceholderItemRepository
 @Service FetchItemsUseCase
 @Service(scope: .transient) view models
+
+# Generated-code compile check (see ARCHITECTURE → Testing seams)
+@Bean tagCounts() → [String: Int]            ← consumed as Dictionary<String, Int>
+@Service TagSummary                          ← two inits, @Inject picks one
+enum Features { @Service WelcomeBanner }     ← nested key → featuresWelcomeBanner
+GreetingKitLive.EnglishGreeter as any Greeter ← local package, auto-imported
 ```
 
 **SwiftUI Previews:** open only the example `.xcodeproj`, scheme `SwiftBeansExample`, My Mac or iPhone Simulator.

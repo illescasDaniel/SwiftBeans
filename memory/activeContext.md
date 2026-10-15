@@ -20,6 +20,6 @@ Review #5–11, #13–16 (generator rules, diagnostics, registry once-only) impl
 ## Next steps
 
 0. Commit this batch (when asked)
-1. Example: add a local-package bean + nested / generic-collection / `any`-bound beans as the generated-code compile check (ARCHITECTURE → Testing seams), then the example-app fixes from the review
+1. Example-app fixes from the review (the generated-code compile check landed: `Packages/GreetingKit`, `Features.WelcomeBanner`, `TagSummary`, `tagCounts` bean; ARCHITECTURE line "Still open from this document…" can now be dropped)
 1. Optional: push `main` when ready
 2. Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / `FakeAppContext` pattern)

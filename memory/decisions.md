@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Example local package split into interface + live targets
+
+**Context:** The example must prove the generator imports a local package module that no app file imports. But the generated `AppContextProtocol` makes the hand-written `FakeAppContext` (app target) name every key's type, so a single-target package type can never stay un-imported.
+
+**Decision:** `Examples/SwiftBeansExample/Packages/GreetingKit` has `GreetingKit` (protocol `Greeter`, imported by the app) and `GreetingKitLive` (`public @Service(boundTo: Greeter.self) EnglishGreeter`). Only `GreetingKitLive` is listed in `.swiftbeans.yml`; no app or test file imports it, so its `import` in `SwiftBeansGenerated.swift` comes from the local-package rule.
+
+**Rationale:** Interface/implementation split is the realistic shape for local-package beans, and it is the only one where the auto-import is actually load-bearing.
+
 ## 2026-10-15 — Generator rewrite: shared syntax rules, collected diagnostics, per-key registry
 
 **Context:** Review #5–11, #13–16: the generator matched keys by raw text, only saw top-level declarations and the first initializer, stopped at the first error with no location, imported via a skip list, and the registry could run a singleton factory twice under contention.
