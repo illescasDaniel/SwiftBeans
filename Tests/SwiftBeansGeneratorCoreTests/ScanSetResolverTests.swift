@@ -20,14 +20,16 @@ struct ScanSetResolverTests {
 		)
 
 		#expect(sources == [
-			tree.resolved("App/Packages/Net/Sources/Net/Alpha.swift"),
-			tree.resolved("App/Packages/Net/Sources/Net/Remote/Client.swift"),
-			tree.resolved("App/Packages/Net/Sources/Net/Zeta.swift"),
+			LocalPackageTargetSources(target: "Net", module: "Net", files: [
+				tree.resolved("App/Packages/Net/Sources/Net/Alpha.swift"),
+				tree.resolved("App/Packages/Net/Sources/Net/Remote/Client.swift"),
+				tree.resolved("App/Packages/Net/Sources/Net/Zeta.swift"),
+			]),
 		])
 	}
 
 	@Test
-	func `Given several packages and targets When resolved Then files from all are merged and sorted`() throws {
+	func `Given several packages and targets When resolved Then one entry per target in config order`() throws {
 		let tree = try TemporaryTree()
 		try tree.makePackage("App/Packages/Net")
 		try tree.write("App/Packages/Net/Sources/Net/Net.swift")
@@ -44,14 +46,20 @@ struct ScanSetResolverTests {
 		)
 
 		#expect(sources == [
-			tree.resolved("App/Packages/Home/Sources/Home/Home.swift"),
-			tree.resolved("App/Packages/Net/Sources/Models/Model.swift"),
-			tree.resolved("App/Packages/Net/Sources/Net/Net.swift"),
+			LocalPackageTargetSources(target: "Net", module: "Net", files: [
+				tree.resolved("App/Packages/Net/Sources/Net/Net.swift"),
+			]),
+			LocalPackageTargetSources(target: "Models", module: "Models", files: [
+				tree.resolved("App/Packages/Net/Sources/Models/Model.swift"),
+			]),
+			LocalPackageTargetSources(target: "Home", module: "Home", files: [
+				tree.resolved("App/Packages/Home/Sources/Home/Home.swift"),
+			]),
 		])
 	}
 
 	@Test
-	func `Given the same target reached by two spellings When resolved Then each file appears once`() throws {
+	func `Given the same target reached by two spellings When resolved Then only the first entry keeps the files`() throws {
 		let tree = try TemporaryTree()
 		try tree.makePackage("App/Packages/Net")
 		try tree.write("App/Packages/Net/Sources/Net/Net.swift")
@@ -64,7 +72,7 @@ struct ScanSetResolverTests {
 			configDirectory: tree.url("App")
 		)
 
-		#expect(sources == [tree.resolved("App/Packages/Net/Sources/Net/Net.swift")])
+		#expect(sources.map(\.files) == [[tree.resolved("App/Packages/Net/Sources/Net/Net.swift")]])
 	}
 
 	@Test
@@ -79,8 +87,9 @@ struct ScanSetResolverTests {
 			configDirectory: tree.url("Apps/Demo")
 		)
 
-		#expect(sources == [tree.resolved("Shared/Net/Sources/Net/Net.swift")])
-		#expect(sources.allSatisfy { !$0.pathComponents.contains("..") })
+		let files = sources.flatMap(\.files)
+		#expect(files == [tree.resolved("Shared/Net/Sources/Net/Net.swift")])
+		#expect(files.allSatisfy { !$0.pathComponents.contains("..") })
 	}
 
 	@Test
@@ -99,7 +108,7 @@ struct ScanSetResolverTests {
 			configDirectory: tree.url("App")
 		)
 
-		#expect(sources == [tree.resolved("Real/Net/Sources/Net/Net.swift")])
+		#expect(sources.map(\.files) == [[tree.resolved("Real/Net/Sources/Net/Net.swift")]])
 	}
 
 	@Test
@@ -159,6 +168,45 @@ struct ScanSetResolverTests {
 		#expect(error?.kind == .missingTarget)
 		#expect(error?.line == 6)
 		#expect(error?.message.contains("Typo") == true)
+	}
+
+	@Test(arguments: [
+		("Networking", "Networking"),
+		("Feature-Home", "Feature_Home"),
+		("My Target", "My_Target"),
+		("3D", "_3D"),
+		("Café", "Café"),
+	])
+	func `Given a target name When converted to a module name Then it follows SwiftPM c99name`(
+		target: String,
+		module: String
+	) {
+		#expect(ScanSetResolver.moduleName(forTarget: target) == module)
+	}
+
+	@Test
+	func `Given a dashed target When resolved Then the entry carries its module name`() throws {
+		let tree = try TemporaryTree()
+		try tree.makePackage("App/Packages/Home")
+		try tree.write("App/Packages/Home/Sources/Feature-Home/Home.swift")
+
+		let sources = try ScanSetResolver.localPackageSources(
+			for: configuration(("Packages/Home", ["Feature-Home"])),
+			configDirectory: tree.url("App")
+		)
+
+		#expect(sources.map(\.target) == ["Feature-Home"])
+		#expect(sources.map(\.module) == ["Feature_Home"])
+	}
+
+	@Test
+	func `Given generator input When encoded and decoded Then it round-trips`() throws {
+		let input = GeneratorInput(
+			targetSources: ["/App/AppContext.swift"],
+			localPackages: [.init(module: "Networking", sources: ["/App/Packages/Net/Sources/Networking/API.swift"])]
+		)
+		let data = try JSONEncoder().encode(input)
+		#expect(try JSONDecoder().decode(GeneratorInput.self, from: data) == input)
 	}
 
 	// MARK: - Helpers

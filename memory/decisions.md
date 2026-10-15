@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Generator rewrite: shared syntax rules, collected diagnostics, per-key registry
+
+**Context:** Review #5–11, #13–16: the generator matched keys by raw text, only saw top-level declarations and the first initializer, stopped at the first error with no location, imported via a skip list, and the registry could run a singleton factory twice under contention.
+
+**Decision:** New `SwiftBeansSyntaxRules` module holds single-declaration rules; macros report them with `context.diagnose` at the offending node, and the generator reuses them only to decide what it can wire (never re-reports). The generator is a scanner → resolver → validator → codegen pipeline over `TypeKey` (normalized syntax, `any P` ≡ `P`), collecting every error as `file:line:column` with notes, sorted. Cycles via Tarjan SCC over injected edges only. The plugin hands files over as `SwiftBeansInput.json` (with per-file module). `SwiftBeansRegistry` uses one `NSCondition` with per-key `creating(owner)` / `ready` slots; same-thread re-entry traps.
+
+**Rationale:** One rule source keeps macro and generator consistent; collecting diagnostics gives Xcode clickable issues for all problems at once; per-key slots give once-only creation without serializing unrelated factories (no main-thread deadlocks).
+
 ## 2026-10-15 — Plugin owns the scan set; resolver shared by byte-identical copy
 
 **Context:** Review found the plugin guessed a source root from `MyApp.swift` / `Assets.xcassets`, could drop target files, searched parent folders for `.swiftbeans.yml`, and never declared local package sources as inputs (stale wiring). A probe on Xcode 27.0 showed `XcodeTarget.inputFiles` already lists every Swift file in nested synchronized-group subfolders.

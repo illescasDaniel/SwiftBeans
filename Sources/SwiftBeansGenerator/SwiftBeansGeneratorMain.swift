@@ -1,29 +1,42 @@
 import Foundation
 import SwiftBeansGeneratorCore
 
-/// `SwiftBeansGenerator --output <file> <source.swift>...`
+/// ```
+/// SwiftBeansGenerator --output <file> --input <generator-input.json>
+/// SwiftBeansGenerator --output <file> <source.swift>...   # debugging: all files are target sources
+/// ```
 ///
 /// Parses exactly the sources it is given; `SwiftBeansPlugin` owns the scan set
-/// (target files + `.swiftbeans.yml` local packages).
+/// (target files + `.swiftbeans.yml` local packages) and writes the input JSON.
 @main
 struct SwiftBeansGeneratorMain {
-	static func main() throws {
+	static let usage = """
+		usage: SwiftBeansGenerator --output <file> --input <generator-input.json>
+		       SwiftBeansGenerator --output <file> <source.swift>...
+		"""
+
+	static func main() {
 		let arguments = Array(CommandLine.arguments.dropFirst())
 		var outputPath: String?
+		var inputPath: String?
 		var sourcePaths: [String] = []
 
 		var index = 0
 		while index < arguments.count {
 			let argument = arguments[index]
 			switch argument {
-			case "--output":
+			case "--output", "--input":
 				index += 1
 				guard index < arguments.count else {
-					fail("--output requires a path")
+					fail("\(argument) requires a path")
 				}
-				outputPath = arguments[index]
+				if argument == "--output" {
+					outputPath = arguments[index]
+				} else {
+					inputPath = arguments[index]
+				}
 			case "--help", "-h":
-				print("usage: SwiftBeansGenerator --output <file> <source.swift>...")
+				print(usage)
 				exit(0)
 			default:
 				if argument.hasPrefix("--") {
@@ -35,30 +48,34 @@ struct SwiftBeansGeneratorMain {
 		}
 
 		guard let outputPath else {
-			fail("--output is required")
+			fail("--output is required\n\(usage)")
 		}
 
-		// De-duplicate by resolved path and sort so output is independent of input order.
-		var sourcesByPath: [String: URL] = [:]
-		for path in sourcePaths {
-			let url = URL(filePath: path).standardizedFileURL.resolvingSymlinksInPath()
-			sourcesByPath[url.path] = url
-		}
-		var sources: [String] = []
-		for path in sourcesByPath.keys.sorted() {
-			sources.append(try String(contentsOf: sourcesByPath[path]!, encoding: .utf8))
+		let input: GeneratorInput
+		if let inputPath {
+			guard sourcePaths.isEmpty else {
+				fail("pass either --input or source paths, not both")
+			}
+			do {
+				input = try JSONDecoder().decode(GeneratorInput.self, from: Data(contentsOf: URL(filePath: inputPath)))
+			} catch {
+				fail("cannot read \(inputPath): \(error)")
+			}
+		} else {
+			input = GeneratorInput(targetSources: sourcePaths)
 		}
 
+		let result = SwiftBeansGeneration.generate(input: input)
+		for diagnostic in result.diagnostics {
+			fputs("\(diagnostic.rendered)\n", stderr)
+		}
+		guard let output = result.output else {
+			exit(1)
+		}
 		do {
-			let graph = try BeanSourceParser.buildGraph(fromSources: sources)
-			let additionalImports = BeanSourceParser.collectAdditionalImports(fromSources: sources)
-			let generated = try BeanCodeGenerator.generate(
-				graph: graph,
-				additionalImports: additionalImports
-			)
-			try generated.write(to: URL(filePath: outputPath), atomically: true, encoding: .utf8)
+			try GeneratedFileWriter.write(output, to: URL(filePath: outputPath))
 		} catch {
-			fail("\(error)")
+			fail("cannot write \(outputPath): \(error)")
 		}
 	}
 

@@ -31,10 +31,18 @@ let package = Package(
 		.package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0"),
 	],
 	targets: [
+		.target(
+			name: "SwiftBeansSyntaxRules",
+			dependencies: [
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+			]
+		),
 		.macro(
 			name: "SwiftBeansMacros",
 			dependencies: [
+				"SwiftBeansSyntaxRules",
 				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+				.product(name: "SwiftDiagnostics", package: "swift-syntax"),
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
 			]
 		),
@@ -48,7 +56,7 @@ let package = Package(
 		.target(
 			name: "SwiftBeansGeneratorCore",
 			dependencies: [
-				"SwiftBeans",
+				"SwiftBeansSyntaxRules",
 				.product(name: "SwiftSyntax", package: "swift-syntax"),
 				.product(name: "SwiftParser", package: "swift-syntax"),
 			],
@@ -78,7 +86,6 @@ let package = Package(
 		.testTarget(
 			name: "SwiftBeansGeneratorCoreTests",
 			dependencies: [
-				"SwiftBeans",
 				"SwiftBeansGeneratorCore",
 			],
 			swiftSettings: [

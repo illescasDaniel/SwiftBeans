@@ -21,4 +21,11 @@ enum AppConfiguration {
 	) -> any HTTPClient {
 		HTTPClientImpl(httpDataRequestHandler: httpDataRequestHandler)
 	}
+
+	/// Generic-collection bean. Consumers may spell the key differently
+	/// (`Dictionary<String, Int>`); the generator normalizes both to one key.
+	@Bean
+	static func tagCounts() -> [String: Int] {
+		["swift": 3, "di": 2, "macros": 1]
+	}
 }

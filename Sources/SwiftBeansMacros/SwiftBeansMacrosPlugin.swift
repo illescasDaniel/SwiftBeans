@@ -8,5 +8,6 @@ struct SwiftBeansMacrosPlugin: CompilerPlugin {
 		ConfigurationMacro.self,
 		BeanMacro.self,
 		ServiceMacro.self,
+		InjectMacro.self,
 	]
 }

@@ -58,10 +58,14 @@
 
 - [x] Project review (2026-10-15); plugin source-discovery fix (review #1–4): SPEC, ARCHITECTURE, tests, implementation, example rename
 
+### Done (continued)
+
+- [x] Review #5–11, #13–16: generator rules (keys, nesting, initializer selection, imports, local-package auto-import), positioned diagnostics, macro diagnostics, `@Inject`, registry once-only (2026-10-15)
+
 ### Open
 
-- [ ] Generator: beans from local packages need the app to `import` that module somewhere, because generated imports only copy imports seen in scanned files (found 2026-10-15 in SPM fixture)
-- [ ] Review #5–10 (type keys, accessor names, file:line diagnostics) and #15 (registry once-only creation)
-
+- [ ] Example: local-package + nested / generic-collection beans as generated-code compile check
+- [ ] Review architecture batch: non-public GeneratorCore product, BeanScope module split
+- [ ] Review example-app fixes (SWIFT_VERSION 6, @State view models, no container in views, unused httpClient, `#if DEBUG` fakes, repository error handling, tests not asserting UI copy)
 - [ ] Push `main` when ready (optional)
 - [ ] Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / FakeAppContext pattern)

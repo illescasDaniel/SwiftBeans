@@ -1,7 +1,8 @@
+import SwiftBeansSyntaxRules
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Marker macro — discovery is performed by the generator.
+/// Validates a `@Service` type; discovery is performed by the generator.
 public struct ServiceMacro: MemberMacro {
 	public static func expansion(
 		of node: AttributeSyntax,
@@ -9,10 +10,7 @@ public struct ServiceMacro: MemberMacro {
 		conformingTo protocols: [TypeSyntax],
 		in context: some MacroExpansionContext
 	) throws -> [DeclSyntax] {
-		_ = node
-		_ = declaration
-		_ = protocols
-		_ = context
+		context.diagnose(SwiftBeansSyntaxRules.serviceViolations(declaration, attribute: node))
 		return []
 	}
 }

@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Feature | `compile-time-di` |
-| Status | Approved (Phase 1) — 2026-10-14 |
+| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15 |
 | Swift tools | 6.4+ (matches `Package.swift`) |
 | Platforms | macOS first; Apple platforms + Linux as package allows |
 | Related targets (planned) | `SwiftBeans` (public API + re-exported macros), `SwiftBeansMacros` (macro plugin), `SwiftBeansPlugin` / generator executable (build tool), tests |
@@ -99,6 +99,20 @@ final class StripePaymentProcessor: PaymentProcessing {
 }
 ```
 
+### Choosing an initializer: `@Inject`
+
+When a `@Service` type has more than one eligible initializer, mark the one the graph should call with `@Inject` (Spring's constructor `@Autowired`). It is a marker with a local macro check (it must be on an initializer); a type with a single eligible initializer does not need it. See Generator rules → Providers and dependencies.
+
+```swift
+@Service
+final class ReportService {
+	@Inject
+	init(store: any Store, clock: Clock = .system) { … }
+
+	convenience init() { … } // used by tests, not by the graph
+}
+```
+
 ### Scopes (v1)
 
 | Scope | Meaning |
@@ -143,14 +157,103 @@ The scan set is defined by the build system and the config file, never by guessi
 
 **Known limitations (v1):** a new `.swift` file added to a local package may need a clean build or project re-plan in Xcode before it joins the graph, because build plugins cannot watch folders.
 
+### Generator rules
+
+These rules define what the generator accepts, how it names and matches things, and how it reports problems. The guiding rule: **every declaration that carries a SwiftBeans attribute is either wired or reported — never skipped silently.**
+
+#### Recognized declarations
+
+1. **Attribute spelling.** `@ApplicationContext`, `@Configuration`, `@Bean`, `@Service` (and `@Inject`, below) are recognized unqualified or qualified with `SwiftBeans.` (e.g. `@SwiftBeans.Service`). Attributes qualified with another module (e.g. `@Other.Service`) are not SwiftBeans attributes and are ignored.
+2. **Nesting.** Annotated declarations are recognized at top level, nested inside types, and inside extensions (`extension Outer { @Service final class Inner { … } }`). A nested type's key and construction use its qualified name (`Outer.Inner`).
+3. **Kinds.**
+	- `@Service` applies to a `class`, `struct` or `actor`. Generic types are not supported.
+	- `@Configuration` applies to an `enum`, `struct`, `class` or `actor`.
+	- `@Bean` applies to a `static func` declared in a `@Configuration` type's body or in an extension of that type (in any scanned file). A `@Bean` in a type that is not `@Configuration` fails the build.
+	- `@ApplicationContext` applies to a `class` (top level or nested).
+4. **`#if` blocks.** An annotated declaration inside an `#if` block fails the build ("not supported in v1"). The generator cannot know which branch the compiler will take.
+5. **Local declarations** (types declared inside function bodies) are not scanned; they cannot be constructed from the context.
+
+#### Application contexts
+
+1. Only `@ApplicationContext` types in the **target's own sources** form the root. Contexts declared in local packages listed in `.swiftbeans.yml` are ignored (they belong to that package's own graph); their `@Service` / `@Bean` declarations still join the graph.
+2. More than one root context in the target fails the build, naming every context.
+3. A target with **no** root context generates an empty file and succeeds (e.g. a feature module that applies the plugin but owns no context).
+
+#### Injectable keys
+
+A key is the type a provider produces (`@Service` type or its `boundTo:`, `@Bean` return type) or a dependency requires (initializer / `@Bean` parameter type). Keys are compared after normalization:
+
+1. **Spelling normalized from syntax**, not raw text: whitespace and redundant parentheses do not matter (`[String:Int]` ≡ `[String: Int]`, `(any P)` ≡ `any P`), and `Array<T>` / `Dictionary<K, V>` match their sugared forms `[T]` / `[K: V]`.
+2. **`any P` ≡ `P`.** A protocol spelled with and without `any` is one key (e.g. `@Service(boundTo: Store.self)` satisfies `init(store: any Store)`). The generated accessor and protocol requirement use the `any P` spelling when any declaration in the graph spells that key with `any`; otherwise `P`.
+3. **Qualified names and typealiases are matched by spelling.** `Swift.String` and `String` are different keys, as are a typealias and its underlying type. When a dependency is missing and a provider exists whose key has the same last component, the diagnostic names it as a likely match.
+4. **Unsupported key types fail the build** at the declaration: optionals (`T?`, `T!`), tuples, function types, opaque types (`some P`), metatypes, `Self`, protocol compositions (`any A & B`), and generic parameters.
+
+#### Accessor names
+
+Each key produces one accessor on the context (and one requirement on `{Context}Protocol`), named from the normalized key with `any` dropped:
+
+| Key | Accessor |
+|-----|----------|
+| `UserService` | `userService` |
+| `URLSession`, `HTTPClient`, `ID` | `urlSession`, `httpClient`, `id` (a leading acronym is lowercased) |
+| `Outer.Inner` | `outerInner` (components joined) |
+| `[User]` | `userArray` |
+| `[String: User]` | `stringUserDictionary` |
+| `Cache<User>` | `userCache` (generic arguments, then the base name) |
+| `Class` | `` `class` `` (Swift keywords are escaped with backticks) |
+
+Two keys that produce the same accessor name fail the build, naming both providers.
+
+#### Providers and dependencies
+
+1. **`@Service` initializer selection.** Candidates are the initializers declared in the type's body or in extensions of the type in scanned files, excluding `private` / `fileprivate` and failable (`init?` / `init!`) initializers.
+	- Exactly one candidate → it is used.
+	- More than one → the one marked `@Inject` is used. With several candidates and zero or more than one `@Inject`, the build fails, listing the candidates.
+	- None declared → a `struct` uses its memberwise initializer (stored properties in declaration order; `let` properties with an initial value are excluded, `var` properties with one become defaulted parameters); a `class` / `actor` uses `init()`. A `struct` with property-wrapper stored properties and no declared initializer fails the build ("declare an initializer").
+2. **`@Bean` methods** must be `static`, declare a return type, and have no generic parameters.
+3. **No `throws` / `async`.** A selected initializer or `@Bean` method that is `throws`, `rethrows` or `async` fails the build. (Accessors are synchronous, non-throwing properties.)
+4. **Defaulted parameters are optional dependencies.** A parameter with a default value is injected when the graph provides its key (for `T? = …`, the key `T`) and otherwise left to its default. It never causes a missing-dependency error, and it only participates in cycle detection when it is injected. A parameter without a default must have a supported, provided key.
+5. **Scope literal.** `scope:` must be `.singleton` or `.transient`, optionally spelled `BeanScope.…` or `SwiftBeans.BeanScope.…`. Any other expression fails the build (it cannot be evaluated at build time).
+6. **Providers from local packages must be public.** A `@Service` declared in a local package target must be `public` / `open` with a `public` selected initializer (a memberwise initializer is never public); a `@Bean` must be `public static` in a `public` configuration type. Otherwise the build fails at that declaration, since the app's generated code cannot call it.
+
+#### Imports in the generated file
+
+1. The generated file imports `Foundation`, `SwiftBeans`, and every module imported by a scanned file, one line per module (the first path component: `import struct Foundation.URL` → `import Foundation`), sorted.
+2. `@testable` and `@preconcurrency` are kept when any scanned import of that module carries them. Imports inside a top-level `#if` block are emitted inside the same condition.
+3. For every local package target that provides at least one bean, the generated file imports that target's module, even if no app file imports it.
+
+#### Diagnostics
+
+1. Errors are printed as `<file>:<line>:<column>: error: <message>` (with `note:` lines for related locations), so Xcode and SwiftPM show them as clickable issues, and the build fails.
+2. **Every** error found in one run is reported, sorted by file path, line, column, then message. Output is identical across runs.
+3. Location rules:
+	- Missing dependency → the parameter that needs it (message names the missing key and the consumer).
+	- Duplicate provider → an error at each provider declaration.
+	- Cycle → an error at the first provider in the cycle (by sort order) with a `note:` at each other provider in it.
+	- Accessor-name collision → an error at each provider.
+	- Unsupported declaration or key → the attribute or type that is unsupported.
+4. **Misuse visible from one declaration is diagnosed by the macro** at that declaration (e.g. `@Bean` not `static`, no return type, `throws` / `async`; `@Service` on a protocol or enum; a non-literal `scope:`), so Xcode shows it inline while editing. The generator does not report the same problem a second time.
+
+#### Generated file
+
+1. The generator writes the output file only when its contents change, so unchanged wiring does not trigger downstream recompiles.
+2. Output is a pure function of the scanned sources: declarations, imports and diagnostics are in a stable order.
+
+### Singleton storage (runtime)
+
+1. A singleton's factory runs **at most once per context instance**, including when several threads resolve it for the first time concurrently. Other callers wait for, and receive, that one instance.
+2. A singleton factory may resolve other singletons (nested resolution) without deadlocking or aborting.
+3. Singleton storage is keyed per accessor, so two beans can never share a slot.
+4. The registry's own state is thread-safe. Whether a bean may be shared across actors follows the context's isolation; the registry does not require beans to be `Sendable` (see ARCHITECTURE → Concurrency).
+
 ## Behavioral rules
 
-1. **Compile-time completeness:** If a required initializer parameter type is not provided by any `@Bean` / `@Service` / context argument in the scanned graph, the build fails with a clear diagnostic.
+1. **Compile-time completeness:** If a required (non-defaulted) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph, the build fails with a diagnostic at that parameter.
 2. **No cycles:** Cyclic dependency graphs fail the build.
-3. **Duplicates:** Two providers for the same injectable key (type + optional qualifier) without an explicit override rule fail the build.
+3. **Duplicates:** Two providers for the same injectable key (normalized type; see Generator rules → Injectable keys) fail the build.
 4. **Plain types stay plain:** Prefer constructor injection. `@Service` types remain manually constructible in tests without the generated context.
-5. **Thread safety:** Generated singleton storage must be concurrency-safe under Swift 6 (ApproachableConcurrency / `Mutex` or equivalent). Exact isolation (`@MainActor` root vs `Sendable` graph) is a Phase 2 contract decision.
-6. **Deterministic generation:** Plugin output is pure given the same source inputs (stable ordering of declarations).
+5. **Thread safety:** Generated singleton storage must be concurrency-safe under Swift 6, and each singleton factory runs at most once per context (see Singleton storage). Exact isolation (`@MainActor` root vs `Sendable` graph) is a Phase 2 contract decision.
+6. **Deterministic generation:** Plugin output — generated code and diagnostics — is pure given the same source inputs (stable ordering).
 
 ## Package layout (planned)
 
@@ -192,9 +295,10 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 ### Scenario: Missing dependency fails the build
 
 **Given** a `@Service` that depends on `Analytics`  
-**And** no `@Bean` / `@Service` / context argument provides `Analytics`  
+**And** no `@Bean` / `@Service` provides `Analytics`  
 **When** the target builds  
-**Then** the build fails with a diagnostic naming the missing type and the consumer
+**Then** the build fails with a diagnostic naming the missing type and the consumer  
+**And** the diagnostic points at the consumer's `Analytics` parameter (`file:line:column`)
 
 ### Scenario: Cyclic dependency fails the build
 
@@ -289,6 +393,140 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 **And** declares `extension AppContext: AppContextProtocol`  
 **And** a hand-written type may conform to `AppContextProtocol` without using the generated accessors
 
+### Scenario: `any P` and `P` are the same key
+
+**Given** `@Service(boundTo: Store.self) final class DiskStore: Store`  
+**And** `@Service final class Repo { init(store: any Store) }`  
+**When** the target builds  
+**Then** `Repo` receives the `DiskStore`  
+**And** the context has exactly one accessor for the key, `store`, typed `any Store`
+
+### Scenario: Accessor names are valid identifiers for any supported key
+
+**Given** `@Bean` methods returning `[String]`, `Cache<User>` and `Class`, and a nested `@Service` `Outer.Inner`  
+**When** the target builds  
+**Then** the generated accessors are `stringArray`, `userCache`, `` `class` `` and `outerInner`  
+**And** the generated file compiles
+
+### Scenario: Unsupported key fails at the declaration
+
+**Given** a `@Bean` method returning `Logger?`  
+**When** the target builds  
+**Then** the build fails with an error at that method's return type saying optional keys are not supported
+
+### Scenario: Accessor name collision fails the build
+
+**Given** a `@Service` `HTTPClient` and a `@Bean` returning `HttpClient`, which both produce the accessor name `httpClient`  
+**When** the target builds  
+**Then** the build fails with an error at each provider naming the shared accessor
+
+### Scenario: Throwing or async bean fails the build
+
+**Given** `@Bean static func database() throws -> Database`  
+**When** the target builds  
+**Then** the `@Bean` macro reports an error at that method  
+**And** the generator does not report it a second time
+
+### Scenario: Initializer selection
+
+**Given** `@Service final class ReportService` with `@Inject init(store: any Store)` and `convenience init()`  
+**When** the target builds  
+**Then** the accessor calls `ReportService(store: self.store)`
+
+**Given** the same type without `@Inject`  
+**When** the target builds  
+**Then** the build fails listing both initializers and suggesting `@Inject`
+
+### Scenario: Initializers in extensions and memberwise structs
+
+**Given** `@Service final class A` whose only initializer is declared in an extension in another file  
+**And** `@Service struct B { let a: A; var retries: Int = 3 }` with no declared initializer  
+**When** the target builds  
+**Then** `A` is built with the extension's initializer  
+**And** `B` is built as `B(a: self.a)` (the defaulted `retries` is not provided by the graph, so its default is used)
+
+### Scenario: Defaulted parameters are optional dependencies
+
+**Given** `@Service final class Feed { init(api: API, clock: Clock = .system) }`  
+**When** the graph provides `API` but not `Clock` and the target builds  
+**Then** the build succeeds and `Feed` is built with the default `clock`  
+**When** a `@Bean` providing `Clock` is added and the target builds  
+**Then** `Feed` receives the graph's `Clock`
+
+### Scenario: Nested and qualified declarations are wired
+
+**Given** `enum Features { @Service final class Search { init() } }`  
+**And** `@SwiftBeans.Service final class Ranker { init(search: Features.Search) }`  
+**When** the target builds  
+**Then** both are in the graph and `Ranker` receives `Features.Search`
+
+### Scenario: Declarations inside `#if` fail the build
+
+**Given** a `@Service` declared inside `#if DEBUG`  
+**When** the target builds  
+**Then** the build fails with an error at that `@Service` saying `#if` is not supported in v1
+
+### Scenario: Non-literal scope fails the build
+
+**Given** `@Service(scope: defaultScope) final class Cache`  
+**When** the target builds  
+**Then** the build fails with an error at the `scope:` argument
+
+### Scenario: Local package beans are imported and must be public
+
+**Given** `.swiftbeans.yml` lists target `Networking`, which declares `public final class APIClient` with `@Service` and a `public init()`  
+**And** no app file imports `Networking`  
+**When** the app builds  
+**Then** the generated file imports `Networking` and the app's context exposes `apiClient`  
+**When** the initializer is `internal` instead  
+**Then** the build fails at that `@Service` saying local package providers must be public
+
+### Scenario: Contexts in local packages are not roots
+
+**Given** a local package target that declares its own `@ApplicationContext`  
+**And** the app target declares `@ApplicationContext final class AppContext`  
+**When** the app builds  
+**Then** the build succeeds and only `AppContext` gets generated accessors
+
+### Scenario: Target without a context
+
+**Given** a target with `@Service` types, no `@ApplicationContext`, and the plugin applied  
+**When** the target builds  
+**Then** the build succeeds and the generated file contains no declarations
+
+### Scenario: Imports are copied faithfully
+
+**Given** one scanned file with `import struct Foundation.URL` and `@preconcurrency import Legacy`  
+**And** another with `#if canImport(UIKit)` / `import UIKit` / `#endif` at top level  
+**When** the target builds  
+**Then** the generated file contains `import Foundation`, `@preconcurrency import Legacy`, and `import UIKit` inside the same `#if canImport(UIKit)`
+
+### Scenario: All errors are reported, in a stable order
+
+**Given** a graph with two missing dependencies in different files and one duplicate key  
+**When** the target builds twice  
+**Then** each build reports all of them as `file:line:column: error:` lines  
+**And** both builds print them in the same order
+
+### Scenario: Unchanged output is not rewritten
+
+**Given** a target that has built once  
+**When** a scanned file changes in a way that does not change the wiring (e.g. a method body) and the target builds again  
+**Then** the generated file's contents and modification date are unchanged
+
+### Scenario: Singleton factory runs once under concurrent first access
+
+**Given** a singleton bean whose factory counts its invocations  
+**When** many threads resolve it for the first time at the same moment  
+**Then** every caller receives the same instance  
+**And** the factory ran exactly once
+
+### Scenario: Nested singleton resolution
+
+**Given** singleton `B` whose factory resolves singleton `A`  
+**When** `B` is resolved first (from any thread)  
+**Then** both are created once and resolution does not deadlock or abort
+
 ## Out of scope (v1)
 
 - Runtime service-locator / `resolve(Type.self)` dictionary container (distinct from the `@ApplicationContext` **attribute**)
@@ -297,6 +535,10 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - Instance (non-static) `@Bean` methods
 - `@Autowired` property injection, field injection, method injection
 - Spring AOP, `@Transactional`, proxies, named qualifiers (deferred)
+- Context arguments (values passed into the `@ApplicationContext` initializer and injected as beans) — deferred
+- Annotated declarations inside `#if` blocks (fail the build in v1)
+- Matching keys across typealiases or module-qualified spellings (matched by spelling; diagnostics hint at near matches)
+- Generic `@Service` types; optional / tuple / function / opaque keys
 - Request / session / Web scopes
 - SwiftUI `@Environment` bridges (may be later)
 - Assisted injection / subcontexts (candidate for v1.1)
@@ -319,9 +561,18 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | `@Bean` methods | Must be `static` |
 | Named qualifiers | Deferred (no v1 BDD requirement) |
 | Context protocol name | `{ContextTypeName}Protocol` (e.g. `AppContextProtocol`); fakes are user-owned |
+| Key matching | Normalized syntax; `any P` ≡ `P`; qualified names / typealiases by spelling (2026-10-15) |
+| Accessor names | Derived from the key with defined rules for nested, collection and generic types; keywords escaped; collisions fail (2026-10-15) |
+| Multiple initializers | `@Inject` marks the one to use; ambiguity fails the build (2026-10-15) |
+| Defaulted parameters | Injected when provided, else default (2026-10-15) |
+| Throwing / async factories | Not supported; macro error (2026-10-15) |
+| Diagnostics | `file:line:column`, all errors per run, stable order; single-declaration misuse via macros (2026-10-15) |
+| Singleton creation | Factory runs at most once per context, even under concurrent first access (2026-10-15) |
 
 ## Phase gate
 
 Phase 1–2 approved 2026-10-14. Phase 3–4 implemented in package tests. Xcode E2E via `Examples/SwiftBeansExample/` (coordinator demo + `SwiftBeansExampleTests`) green on macOS 2026-10-14.
 
 `{Context}Protocol` generation: Phase 1 approved with plan 2026-10-14; Phase 3–4 follow in package tests + example `FakeAppContext` / Previews.
+
+Generator rules + Singleton storage (review #5–11, #13–16): Phase 1 approved 2026-10-15; Phase 2 in ARCHITECTURE.md.

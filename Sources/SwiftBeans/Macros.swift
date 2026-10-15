@@ -32,3 +32,10 @@ public macro Service(boundTo: Any.Type, scope: BeanScope = .singleton) = #extern
 	module: "SwiftBeansMacros",
 	type: "ServiceMacro"
 )
+
+/// Marks the initializer the generated graph calls when a `@Service` type has more than one.
+@attached(peer)
+public macro Inject() = #externalMacro(
+	module: "SwiftBeansMacros",
+	type: "InjectMacro"
+)

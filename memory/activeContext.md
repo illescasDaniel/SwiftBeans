@@ -8,18 +8,18 @@ _Last updated: 2026-10-15_
 
 ## Current focus
 
-None — plugin source-discovery fixes (review #1–4) implemented and committed 2026-10-15. `swift test` (42) + example `xcodebuild test` green; SPM fixture (scratchpad) verified nested folders, excluded file, parent config ignored, config add/edit regeneration, config errors; Xcode verified config error fails the build.
+Review #5–11, #13–16 (generator rules, diagnostics, registry once-only) implemented 2026-10-15 through all four SDD phases; `swift test` (113) and the example's `xcodebuild test` are green. Uncommitted. Later batches: architecture items (BeanScope module split, non-public GeneratorCore product) and example-app fixes.
 
 ## Just changed
 
-- `ScanSetResolution.swift` (parser + resolver; GeneratorCore canonical + plugin copy + drift test)
-- Plugin rewritten: build-system files only, `.swiftbeans.yml` at scan root only, local package sources + config declared as inputs
-- Generator: no `--config` / upward search; dedupes + sorts inputs; rejects unknown `--` options
-- Removed `ScanConfigurationLoader` and public `SwiftBeansScanConfiguration`
-- Example entry renamed `MyApp.swift` → `SwiftBeansExampleApp.swift`
+- `SwiftBeansSyntaxRules` + macros diagnose at nodes; `@Inject`
+- GeneratorCore: `DeclarationScanner`, `ProviderResolver`, `GraphValidator`, `CodeGenerator`, `TypeKey`; legacy parser/validator/codegen/`Naming` deleted; no dependency on `SwiftBeans`
+- CLI `--input <json>`; plugin writes `SwiftBeansInput.json` (write-if-changed); output written only when changed
+- `SwiftBeansRegistry`: NSCondition per-key once-only, re-entry traps
 
 ## Next steps
 
-0. Next review items: type-key normalisation / accessor naming / file:line diagnostics (#5–10); registry once-only creation (#15)
+0. Commit this batch (when asked)
+1. Example: add a local-package bean + nested / generic-collection / `any`-bound beans as the generated-code compile check (ARCHITECTURE → Testing seams), then the example-app fixes from the review
 1. Optional: push `main` when ready
 2. Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / `FakeAppContext` pattern)

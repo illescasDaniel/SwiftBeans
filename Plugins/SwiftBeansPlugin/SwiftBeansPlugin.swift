@@ -22,6 +22,7 @@ struct SwiftBeansPlugin: BuildToolPlugin {
 
 	static let configFileName = ".swiftbeans.yml"
 	static let outputFileName = "SwiftBeansGenerated.swift"
+	static let inputFileName = "SwiftBeansInput.json"
 
 	static func makeCommands(
 		targetName: String,
@@ -31,33 +32,51 @@ struct SwiftBeansPlugin: BuildToolPlugin {
 		generator: URL
 	) throws -> [Command] {
 		let configURL = scanRoot.appending(path: configFileName)
-		var sources = targetSources
-		var inputFiles: [URL] = []
+		var packages: [LocalPackageTargetSources] = []
+		var inputFiles = targetSources
 		if FileManager.default.fileExists(atPath: configURL.path) {
 			do {
 				let configuration = try ScanConfigurationParser.load(contentsOf: configURL)
-				sources += try ScanSetResolver.localPackageSources(
-					for: configuration,
-					configDirectory: scanRoot
-				)
+				packages = try ScanSetResolver.localPackageSources(for: configuration, configDirectory: scanRoot)
 			} catch {
 				Diagnostics.error(error.message, file: configURL.path, line: error.line)
 				return []
 			}
 			inputFiles.append(configURL)
+			inputFiles += packages.flatMap(\.files)
 		}
-		inputFiles += sources
+
+		// The file list goes through a JSON file: one argument per source can exceed the OS limit.
+		let input = GeneratorInput(
+			targetSources: targetSources.map(\.path),
+			localPackages: packages.map { .init(module: $0.module, sources: $0.files.map(\.path)) }
+		)
+		let inputURL = workDirectory.appending(path: inputFileName)
+		try writeIfChanged(input, to: inputURL)
+		inputFiles.append(inputURL)
 
 		let output = workDirectory.appending(path: outputFileName)
 		return [
 			.buildCommand(
 				displayName: "SwiftBeans: generate \(targetName)",
 				executable: generator,
-				arguments: ["--output", output.path] + sources.map(\.path),
+				arguments: ["--output", output.path, "--input", inputURL.path],
 				inputFiles: inputFiles,
 				outputFiles: [output]
 			),
 		]
+	}
+
+	/// Leaves an identical file untouched so its modification date does not rerun the generator.
+	private static func writeIfChanged(_ input: GeneratorInput, to url: URL) throws {
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+		let data = try encoder.encode(input)
+		if let existing = try? Data(contentsOf: url), existing == data {
+			return
+		}
+		try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+		try data.write(to: url, options: .atomic)
 	}
 }
 

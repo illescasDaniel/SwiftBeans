@@ -1,6 +1,8 @@
+import SwiftBeansSyntaxRules
 import SwiftSyntax
 import SwiftSyntaxMacros
 
+/// Adds the `_swiftBeansRegistry` singleton storage to an `@ApplicationContext` class.
 public struct ApplicationContextMacro: MemberMacro {
 	public static func expansion(
 		of node: AttributeSyntax,
@@ -8,11 +10,10 @@ public struct ApplicationContextMacro: MemberMacro {
 		conformingTo protocols: [TypeSyntax],
 		in context: some MacroExpansionContext
 	) throws -> [DeclSyntax] {
-		_ = node
-		_ = protocols
-		_ = context
-		guard declaration.is(ClassDeclSyntax.self) else {
-			throw SwiftBeansMacroError.message("@ApplicationContext can only be applied to a class")
+		let violations = SwiftBeansSyntaxRules.applicationContextViolations(declaration, attribute: node)
+		guard violations.isEmpty else {
+			context.diagnose(violations)
+			return []
 		}
 		// Internal (same-module) so generated extensions in other files can use it.
 		return [

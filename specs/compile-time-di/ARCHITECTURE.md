@@ -24,6 +24,8 @@ flowchart LR
   Plugin -->|"invokes"| GenTool
   GenTool -->|"writes"| Gen
   Lib -->|"depends on"| Macros
+  Macros --> Rules["SwiftBeansSyntaxRules\nshared declaration checks"]
+  GenTool --> Rules
   Src --> Lib
   Gen --> Lib
 ```
@@ -31,10 +33,11 @@ flowchart LR
 | Target | Kind | Responsibility |
 |--------|------|----------------|
 | `SwiftBeans` | library product | Public types (`BeanScope`), macro *declarations* (`#externalMacro`), `SwiftBeansRegistry` |
-| `SwiftBeansMacros` | `.macro` | Expand attached macros: local validation + minimal surface (no cross-file discovery) |
+| `SwiftBeansMacros` | `.macro` | Expand attached macros: local validation (as positioned `Diagnostic`s) + minimal surface (no cross-file discovery) |
+| `SwiftBeansSyntaxRules` | internal library (SwiftSyntax only) | Declaration-local rules shared by macros and generator: attribute recognition, scope literal, `@Bean` / `@Service` / `@Inject` shape checks. One implementation, so the macro and the generator never disagree |
 | `SwiftBeansGenerator` | executable | Parse the Swift files it is given; build IR graph; emit `SwiftBeansGenerated.swift`; emit diagnostics on failure. **Does not read `.swiftbeans.yml` or search for files.** |
 | `SwiftBeansPlugin` | build tool plugin | Own the scan set: read the build system's file list and `.swiftbeans.yml`, resolve local package sources, declare all of them as inputs, invoke the generator with the explicit file list |
-| `SwiftBeansGeneratorCore` | internal library (tests + generator) | Graph IR, parser, validator, codegen, and the scan-set resolver source of truth (see [Scan-set resolution](#scan-set-resolution)) |
+| `SwiftBeansGeneratorCore` | library (tests + generator) | Graph IR, parser, validator, codegen, diagnostics, and the scan-set resolver source of truth (see [Scan-set resolution](#scan-set-resolution)). Depends on `SwiftBeansSyntaxRules` + SwiftSyntax, **no longer on `SwiftBeans`** (it only needed `BeanScope`; scope is now parsed into the rules module's own enum). Still a package product until the later "product surface" batch; only `SwiftBeansGeneration` (below) is public |
 | `SwiftBeansTests` | tests | BDD scenarios against fixtures that apply the plugin (Phase 3+) |
 | `SwiftBeansMacrosTests` | tests | Macro expansion unit tests via SwiftSyntax |
 
@@ -45,11 +48,11 @@ Consumers depend on product `SwiftBeans` and attach plugin `SwiftBeansPlugin` to
 | Concern | Owner | Why |
 |---------|-------|-----|
 | Attribute is valid Swift | Macros (`@ApplicationContext`, `@Configuration`, `@Bean`, `@Service`) | Compiler must recognize attributes |
-| `@Bean` is `static` | Macro diagnostic on `@Bean` | Local to the declaration |
+| Single-declaration misuse: `@Bean` not `static` / no return type / `throws` / `async` / generic; `@Service` on protocol, enum or generic type; `@Inject` not on an initializer; non-literal `scope:` | `SwiftBeansSyntaxRules`, reported by the **macro** as a `Diagnostic` at the offending node | Inline in Xcode while editing; the generator runs the same rules and silently drops a violating declaration (the macro already fails the build), so nothing is reported twice |
 | Discover all `@Service` / `@Bean` / `@Configuration` / `@ApplicationContext` across files & YAML packages | **Generator** | Macros cannot see other files |
-| Missing / duplicate / cycle checks | **Generator** | Needs full graph IR |
+| Missing / duplicate / cycle / accessor-collision checks, initializer selection, `#if` and public-ness checks, `@Bean` outside `@Configuration` | **Generator** | Needs other declarations (extensions, other files, origin of the file) |
 | Emit accessors + singleton storage on the context type | **Generator** → `SwiftBeansGenerated.swift` | Cross-cutting; written as a normal `extension` on the user’s context type |
-| Emit `{ContextTypeName}Protocol` + `extension Context: Protocol` | **Generator** → same file | Testable / Preview seam; same getters as accessors; fakes are user-owned |
+| Emit `{ContextTypeName}Protocol` + `extension Context: Protocol` | **Generator** → same file | Testable / Preview seam; same getters as accessors; fakes are user-owned. The protocol is top-level and named after the context's last name component (`App.Context` → `ContextProtocol`); the extension uses the qualified name |
 | Optional peer helpers on a single type | Macros | Keep expansions small; prefer generator for graph output |
 
 Macros are **not** the discovery engine. They are the public attribute API plus local checks. The generator is the Spring “component scan.”
@@ -101,90 +104,310 @@ Empty or missing file ⇒ scan only the plugin-attached target’s sources.
 
 ### Macro declaration surface (signatures)
 
-Exact `#externalMacro` module names follow Package layout; semantics:
+```swift
+@attached(member, names: named(_swiftBeansRegistry))
+public macro ApplicationContext() = #externalMacro(module: "SwiftBeansMacros", type: "ApplicationContextMacro")
+
+@attached(member)
+public macro Configuration() = #externalMacro(module: "SwiftBeansMacros", type: "ConfigurationMacro")
+
+@attached(peer)
+public macro Bean(scope: BeanScope = .singleton) = #externalMacro(module: "SwiftBeansMacros", type: "BeanMacro")
+
+@attached(member)
+public macro Service(scope: BeanScope = .singleton) = #externalMacro(module: "SwiftBeansMacros", type: "ServiceMacro")
+@attached(member)
+public macro Service(boundTo: Any.Type, scope: BeanScope = .singleton) = #externalMacro(module: "SwiftBeansMacros", type: "ServiceMacro")
+
+/// New (2026-10-15): marks the initializer the graph calls when a `@Service` has several.
+@attached(peer)
+public macro Inject() = #externalMacro(module: "SwiftBeansMacros", type: "InjectMacro")
+```
+
+All macros expand to nothing except `@ApplicationContext` (adds `let _swiftBeansRegistry = SwiftBeansRegistry()`). They report problems with `context.diagnose(Diagnostic(node:message:))` at the offending syntax node (the `static` keyword's absence is reported at `func`, `throws` at the effect specifier, a bad `scope:` at the argument, etc.) and return `[]`, instead of throwing a bare string. `SwiftBeansMacroError` is replaced by `SwiftBeansSyntaxRules.Violation` → `DiagnosticMessage`.
+
+### `SwiftBeansSyntaxRules` (internal module)
 
 ```swift
-@attached(member, names: arbitrary) // storage hooks if needed; accessors primarily from generator
-public macro ApplicationContext() = #externalMacro(...)
+enum SwiftBeansAttribute: String { case applicationContext, configuration, bean, service, inject }
 
-@attached(extension, conformances: /* none required in v1 */)
-public macro Configuration() = #externalMacro(...)
+/// `@Service` / `@SwiftBeans.Service` → `.service`; `@Other.Service` → nil.
+func swiftBeansAttribute(_ attribute: AttributeSyntax) -> SwiftBeansAttribute?
 
-@attached(peer) // or memberAttribute — validates static factory
-public macro Bean(scope: BeanScope = .singleton) = #externalMacro(...)
+enum ScopeLiteral { case singleton, transient }
+/// `.singleton`, `BeanScope.singleton`, `SwiftBeans.BeanScope.singleton`; nil + violation otherwise.
+func scopeArgument(of attribute: AttributeSyntax) -> Result<ScopeLiteral, Violation>   // default .singleton when absent
 
-@attached(peer) // attribute-only; optional diagnostic if no suitable init
-public macro Service(
-	boundTo: Any.Type? = nil,
-	scope: BeanScope = .singleton
-) = #externalMacro(...)
+struct Violation: Error, Equatable {
+	var node: Syntax       // where to point
+	var message: String
+	var id: String         // stable diagnostic id, e.g. "bean.notStatic"
+}
+
+func beanViolations(_ function: FunctionDeclSyntax, attribute: AttributeSyntax) -> [Violation]
+func serviceViolations(_ declaration: some DeclSyntaxProtocol, attribute: AttributeSyntax) -> [Violation]
+func configurationViolations(_ declaration: some DeclSyntaxProtocol) -> [Violation]
+func applicationContextViolations(_ declaration: some DeclSyntaxProtocol) -> [Violation]
+func injectViolations(_ declaration: some DeclSyntaxProtocol) -> [Violation]
 ```
 
-Phase 4 may simplify roles (e.g. marker macros that expand to `()`-empty) if the generator owns all codegen; the **names and parameters** above are the contract.
+## Generator pipeline (internal)
 
-### Injectable key
-
-v1 key = **fully qualified type name** of the provided type (protocol if `boundTo:` / protocol return type; else concrete type). No named qualifiers in v1.
-
-## Generator IR (internal)
-
-Not a public product API; documented for implementers:
-
-```
-ScanResult
-  contexts: [ContextDecl]          // @ApplicationContext types (expect exactly one per graph / target in v1)
-  configurations: [ConfigDecl]   // @Configuration types
-  beans: [BeanProvider]          // static @Bean funcs → providedType, paramTypes, scope, source
-  services: [ServiceProvider]    // @Service types → providedType (or boundTo), initParams, scope, source
-
-Graph
-  nodes: providers by InjectableKey
-  edges: dependency → provider
-  validate: missing | duplicate | cycle
+```mermaid
+flowchart LR
+  In["GeneratorInput\n(files + origin)"] --> Scan["DeclarationScanner\nparse each file once"]
+  Scan --> Res["ProviderResolver\nkeys, inits, extensions"]
+  Res --> Val["GraphValidator\nmissing, duplicate, cycle, names"]
+  Val --> Gen["CodeGenerator"]
+  Scan --> Imp["ImportCollector"]
+  Imp --> Gen
+  Scan -.diagnostics.-> Diag["[GeneratorDiagnostic]"]
+  Res -.-> Diag
+  Val -.-> Diag
 ```
 
-v1 assumes **one** `@ApplicationContext` in the effective scan set. Multiple contexts → generator diagnostic (subcontexts later).
+Each stage **collects** diagnostics instead of throwing on the first problem; code is generated only when the final list has no errors. Every source file is parsed exactly once (`Parser.parse` + one `SourceLocationConverter`).
+
+### Public entry point (the only public API of `SwiftBeansGeneratorCore`)
+
+```swift
+public struct GeneratorInput: Sendable, Codable, Equatable {
+	public var targetSources: [String]                 // absolute paths
+	public var localPackages: [LocalPackageSources]
+	public struct LocalPackageSources: Sendable, Codable, Equatable {
+		public var module: String                      // Swift module name of the package target
+		public var sources: [String]
+	}
+}
+
+public struct GeneratorDiagnostic: Sendable, Equatable {
+	public enum Severity: Sendable { case error, warning, note }
+	public var severity: Severity
+	public var id: String                              // stable, e.g. "graph.missingDependency"
+	public var location: SourcePosition
+	public var message: String
+	public var notes: [GeneratorDiagnostic]            // severity .note
+	/// `<file>:<line>:<column>: error: <message>` followed by note lines.
+	public var rendered: String
+}
+
+public struct SourcePosition: Sendable, Equatable, Comparable { // (file, line, column); 1-based
+	public var file: String
+	public var line: Int
+	public var column: Int
+}
+
+public struct GenerationResult: Sendable, Equatable {
+	public var diagnostics: [GeneratorDiagnostic]      // sorted (file, line, column, message)
+	public var output: String?                         // nil iff diagnostics contain an error
+}
+
+public enum SwiftBeansGeneration {
+	/// Reads the files, then runs `generate(sources:)`.
+	public static func generate(input: GeneratorInput, fileManager: FileManager = .default) -> GenerationResult
+	/// In-memory entry for tests: path → text with an origin.
+	public static func generate(sources: [SourceFile]) -> GenerationResult
+}
+
+public struct SourceFile: Sendable, Equatable {
+	public enum Origin: Sendable, Equatable { case target, localPackage(module: String) }
+	public var path: String
+	public var text: String
+	public var origin: Origin
+}
+```
+
+`BeanSourceParser`, `BeanGraphValidator`, `BeanCodeGenerator`, `BeanGraph`, `BeanProvider`, `InjectableKey`, `BeanParameter`, `BeanFactoryKind` and `BeanGraphError` become **internal** (tests use `@testable import`) and are reshaped as below. `BeanGraphError` is replaced by `GeneratorDiagnostic` ids; `.notImplemented` is removed. The `contextTypeName: "AppContext"` default parameter is removed.
+
+### Declarations and origin
+
+```swift
+struct ScannedFile {
+	var source: SourceFile
+	var contexts: [ContextDecl]          // @ApplicationContext classes (qualified name, location)
+	var typeDecls: [TypeDecl]            // every class/struct/actor/enum, with qualified name, so extensions can be matched
+	var extensions: [ExtensionDecl]      // extended type's qualified spelling + members
+	var annotated: [AnnotatedDecl]       // @Service / @Configuration / @Bean / @Inject that passed SyntaxRules
+	var conditionalAnnotations: [Location] // annotated decls under #if → "#if not supported" diagnostics
+	var imports: [ImportRecord]
+}
+```
+
+- **Qualified names:** a declaration's name is the chain of enclosing type / extension names joined with `.` (`extension Outer { class Inner }` → `Outer.Inner`).
+- **Origin:** `.target` files supply root contexts and providers; `.localPackage(module:)` files supply providers only (their contexts are ignored) and trigger the public-ness checks and the module import.
+- **Recognition** goes through `swiftBeansAttribute(_:)` so `@SwiftBeans.Service` counts and `@Other.Service` does not.
+
+### Injectable keys
+
+```swift
+/// Normalized type used as a graph key. `any` is not part of the key.
+indirect enum TypeKey: Hashable, Comparable {
+	case nominal([NominalComponent])           // Outer.Inner<…>
+	case array(TypeKey)                        // [T] and Array<T>
+	case dictionary(TypeKey, TypeKey)          // [K: V] and Dictionary<K, V>
+
+	struct NominalComponent: Hashable { var name: String; var genericArguments: [TypeKey] }
+
+	/// Canonical spelling, e.g. `Outer.Inner`, `[String: User]`, `Cache<User>`.
+	var description: String
+	/// SPEC accessor naming table; keywords are returned already escaped (`` `class` ``).
+	var accessorName: String
+}
+
+enum KeyNormalization {
+	/// Strips `any`, parentheses and whitespace; desugars nothing else.
+	/// Returns `.unsupported(reason)` for optionals, IUOs, tuples, functions, `some`, metatypes,
+	/// `Self`, and protocol compositions (`any A & B`).
+	static func key(for type: TypeSyntax) -> Result<(key: TypeKey, spelledWithAny: Bool), UnsupportedKey>
+}
+```
+
+The accessor's declared type is `key.description`, prefixed with `any ` when **any** occurrence of the key in the graph (provider or dependency) had `spelledWithAny`. Registry keys use `accessorName` with backticks removed.
+
+Missing-dependency hints: among provider keys whose last nominal component name equals the missing key's last component name, the diagnostic adds a note "did you mean '…' (provided by …)?".
+
+### Providers
+
+```swift
+struct BeanProvider {
+	var key: TypeKey
+	var scope: ScopeLiteral
+	var origin: SourceFile.Origin
+	var location: SourcePosition              // attribute / declaration for diagnostics
+	var displayName: String                   // `ReportService`, `AppConfiguration.urlSession`
+	var factory: Factory
+	var parameters: [BeanParameter]
+
+	enum Factory { case initializer(typeName: String), staticMethod(typeName: String, name: String) }
+}
+
+struct BeanParameter {
+	var label: String?                        // nil for `_`
+	var key: TypeKey
+	var hasDefault: Bool                      // optional dependency
+	var location: SourcePosition              // the parameter, for missing-dependency errors
+}
+```
+
+`ProviderResolver` builds these from `annotated` declarations plus all `typeDecls` / `extensions` across files:
+
+- **Initializer candidates** = initializers in the type body + in `ExtensionDecl`s whose extended spelling equals the type's qualified name, minus `private` / `fileprivate` / failable. Selection per SPEC (`@Inject`, memberwise for structs, `init()` for classes/actors). `throws` / `async` on the selected initializer is a generator diagnostic (the macro cannot see which initializer is selected).
+- **Memberwise** parameters: stored `let`/`var` without accessors, not `static`/`lazy`, in declaration order; `let x = …` excluded; `var x: T = …` → `hasDefault`. A stored property with an attribute (property wrapper) and no declared init → diagnostic.
+- **Defaulted parameter of type `T?`** is looked up as `T`.
+- **Public-ness** (local packages only): type modifier `public`/`open`, initializer `public`; for `@Bean`, configuration type `public` and function `public`.
+- **`@Bean` placement**: the enclosing type (declared or extended) must be a `@Configuration` type somewhere in the scan set.
+
+### Validation
+
+`GraphValidator.validate(providers:context:) -> (graph: BeanGraph?, diagnostics: [GeneratorDiagnostic])` checks, collecting all of them:
+
+1. duplicate keys (error at every provider of the key),
+2. accessor-name collisions between different keys (error at every provider),
+3. missing non-defaulted dependencies (error at the parameter; hint note),
+4. cycles over **injected** edges only (a defaulted parameter whose key is not provided is not an edge). Each strongly connected component is reported once: error at the provider with the smallest location, notes at the others.
+
+Iteration is over providers sorted by `(key.description, location)`, never over dictionary order.
+
+### Imports
+
+```swift
+struct ImportRecord: Hashable {
+	var module: String                         // first path component
+	var testable: Bool
+	var preconcurrency: Bool
+	var condition: String?                     // nil = unconditional; else a #if expression
+}
+```
+
+- Top-level `import` → `condition: nil`. An import inside a top-level `#if` clause gets that clause's effective condition: `#if a` → `a`; `#elseif b` → `!(a) && (b)`; `#else` → `!(a) && !(b)`. Nested `#if` clauses combine with `&&`.
+- Merge per `(module, condition)`; an unconditional import of a module drops conditional ones for it. `testable` / `preconcurrency` are OR-ed.
+- Emitted: `Foundation`, `SwiftBeans`, then unconditional imports sorted, then one `#if <condition>` block per condition (sorted) — except `Swift`, which is never emitted.
+- Every `localPackage(module:)` that contributes a provider adds an unconditional `import <module>`.
+- The previous skip list (`SwiftUI`, `UIKit`, `Testing`, …) is removed: test files are never in the scan set, and skipping UI modules broke beans of UI types.
 
 ## Generated code shape
 
-For `@ApplicationContext final class AppContext` and providers `UserService` (singleton), `Validator` (transient):
+For `@ApplicationContext final class AppContext` and providers `UserService` (singleton), `Validator` (transient), `any Store` (bound service):
 
 ```swift
-// SwiftBeansGenerated.swift (illustrative)
+// Generated by SwiftBeans — do not edit.
+import Foundation
 import SwiftBeans
+import Networking
+
+protocol AppContextProtocol: AnyObject {
+	var store: any Store { get }
+	var userService: UserService { get }
+	var validator: Validator { get }
+}
 
 extension AppContext {
+	var store: any Store {
+		_swiftBeansRegistry.singleton(key: "store") {
+			DiskStore()
+		}
+	}
+
 	var userService: UserService {
-		_swiftBeansRegistry.singleton(key: "UserService") {
+		_swiftBeansRegistry.singleton(key: "userService") {
 			UserService(apiClient: self.apiClient)
 		}
 	}
 
 	var validator: Validator {
-		Validator(/* deps via self.* */)
+		Validator()
 	}
 }
+
+extension AppContext: AppContextProtocol {}
 ```
 
-`SwiftBeansRegistry.singleton` runs `create` **outside** its lock so nested singleton factories (e.g. `UserService` → `apiClient`) do not re-enter a non-recursive lock.
-
-Exact storage embedding (member macro property vs generated stored property) is an implementation detail; **observable contract** is:
-
-- Camel-cased accessor per provided key (e.g. `userService` for `UserService`)
-- Singleton: same instance for the lifetime of the context instance
-- Transient: new instance per accessor call
-- Construction calls `@Bean` static methods or `@Service` initializers with dependencies taken from other accessors
+- Accessors and protocol requirements are sorted by accessor name.
+- Construction uses the qualified type name (`Features.Search(...)`) and passes only injected parameters; defaulted parameters without a provider are omitted.
+- No root context → the file contains only the header comment and imports `Foundation`.
+- The output file is written only when its bytes differ from the existing file. (The generator still runs whenever an input changes; only downstream recompilation is avoided.)
 
 ## Concurrency (v1 decision)
 
 | Choice | Decision |
 |--------|----------|
 | Default isolation | **None forced** — users may add `@MainActor` to their context type |
-| Singleton slots | **`SwiftBeansRegistry`** (`NSLock` + dictionary; create-outside-lock for nested deps) |
+| Singleton slots | **`SwiftBeansRegistry`**: per-key once-only creation (below) |
 | Context type | Prefer `final class` so identity/lifetime match Spring-ish singleton-per-context |
-| Sendable | Generated storage is Sendable-safe; user services need not be `Sendable` if the context is used from one actor — document that cross-actor sharing of non-Sendable beans is the user’s responsibility |
+| Sendable | Registry state is thread-safe; user services need not be `Sendable` if the context is used from one actor — cross-actor sharing of non-Sendable beans is the user's responsibility. The registry stays `@unchecked Sendable` with that documented on the type |
 
 Rationale: a library package must work off the main actor and on Linux CI; forcing `@MainActor` on all graphs would hurt server/CLI use.
+
+### `SwiftBeansRegistry` contract (revised 2026-10-15)
+
+```swift
+public final class SwiftBeansRegistry: @unchecked Sendable {
+	public init()
+	/// Returns the instance for `key`, creating it with `create` at most once per registry.
+	public func singleton<T>(key: String, create: () -> T) -> T
+}
+```
+
+Algorithm (one `NSCondition`, available on Apple platforms and Linux Foundation):
+
+```
+lock
+loop:
+  slot[key] == .ready(value)       → unlock; return value
+  slot[key] == .creating(owner)    → owner == current thread ? preconditionFailure("cyclic singleton resolution: key")
+                                                              : wait; continue loop
+  slot[key] == nil                 → slot[key] = .creating(current thread); break
+unlock
+value = create()                   // outside the lock: nested resolution and unrelated keys proceed
+lock; slot[key] = .ready(value); broadcast; unlock
+return value
+```
+
+- Once-only: only the thread that set `.creating` runs `create`; racers wait and read the stored value.
+- Nested resolution works because `create` runs without the lock held; waiting happens only on *other* keys' in-flight creation, and the build-time cycle check guarantees those waits form no cycle.
+- Unrelated keys never wait on each other's factories (no global serialization), so a factory that hops to the main thread does not deadlock a main-thread resolve of a different bean.
+- `create` cannot throw (accessors are non-throwing), so `.creating` is always resolved unless the process traps.
+- Keys are accessor names, which the generator guarantees unique per context.
 
 ## Plugin invocation contract
 
@@ -207,11 +430,16 @@ No folder walking of the target, no source-root inference, no file-name markers.
 ### Generator CLI
 
 ```
-SwiftBeansGenerator --output <file> <source.swift>...
+SwiftBeansGenerator --output <file> --input <generator-input.json>
+SwiftBeansGenerator --output <file> <source.swift>...      # debugging: all files are target sources
 ```
 
-- Sources are taken as given; the generator de-duplicates by resolved path and sorts them (SPEC rule 6).
-- Exit code ≠ 0 + `error: …` on stderr ⇒ build failure (missing / duplicate / cycle).
+- The plugin writes `GeneratorInput` as JSON to `<pluginWorkDirectory>/SwiftBeansInput.json` (only when its bytes change) and passes `--input`. This replaces one argument per file, which could exceed the OS argument-length limit on large apps, and carries each local package file's module.
+- The JSON file is a declared input too, so a re-planned file list reruns the generator.
+- `GeneratorInput` is declared in the shared `ScanSetResolution.swift` (public, Foundation-only), so the plugin's encoder and the generator's decoder are the same code, kept identical by the drift guard. `SwiftBeansGeneratorCore` re-exposes it from there.
+- Local package module name = the target name with characters that are not valid in a Swift identifier replaced by `_` (SwiftPM's `c99name`).
+- Sources are de-duplicated by resolved path and sorted (SPEC rule 6). A path listed both as a target source and a package source counts as a target source.
+- Every diagnostic is printed to stderr as its `rendered` form. Exit code is 1 if any error was reported, else 0. Warnings alone do not fail.
 
 ### Scan-set resolution
 
@@ -223,13 +451,20 @@ enum ScanConfigurationParser {
 }
 
 enum ScanSetResolver {
-	/// Resolves `local_packages` to sorted, de-duplicated `.swift` files.
-	/// Paths are relative to `configDirectory`, standardized and symlink-resolved.
+	/// Resolves `local_packages` to one entry per listed target (in config order), each with its
+	/// sorted `.swift` files. Paths are relative to `configDirectory`, standardized and symlink-resolved;
+	/// a file reached through two entries is kept only in the first.
 	static func localPackageSources(
 		for configuration: SwiftBeansScanConfiguration,
 		configDirectory: URL,
 		fileManager: FileManager = .default
-	) throws(ScanConfigurationError) -> [URL]
+	) throws(ScanConfigurationError) -> [LocalPackageTargetSources]
+}
+
+struct LocalPackageTargetSources: Equatable, Sendable {
+	var target: String       // as written in the config
+	var module: String       // c99name of `target`
+	var files: [URL]
 }
 
 struct ScanConfigurationError: Error, CustomStringConvertible {
@@ -254,21 +489,21 @@ On a `ScanConfigurationError` the plugin emits `Diagnostics.error(message, file:
 
 ### Plugin shape
 
-`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommand(...)` that resolves the config, builds the argument list and returns the single `.buildCommand`.
+`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that resolves the config, writes `SwiftBeansInput.json`, and returns the single `.buildCommand` (`--output`, `--input`; inputs = target sources ∪ package sources ∪ config ∪ input JSON).
 
 ### Known limitation
 
 Neither SPM nor Xcode re-plans plugins when an *undeclared* file appears, so a new `.swift` file in a local package (or a newly created `.swiftbeans.yml`) may need a re-plan / clean build to join the graph (SPEC → Known limitations).
 
-## Testing seams (Phase 3 preview)
+## Testing seams
 
 | Suite | What |
 |-------|------|
-| `SwiftBeansTests` | Scope enum, registry |
-| `SwiftBeansGeneratorCoreTests` | Config parser (quotes, comments, errors with line numbers), resolver against temp folders (missing package, no `Package.swift`, missing `Sources/<target>`, `..` / symlink normalization, sort + dedupe), plugin-copy drift guard |
-| Example app (manual) | SPEC *Source discovery* scenarios that need a real build system: nested folders with a renamed `@main` file, non-member file, parent-folder config, regeneration on edit |
-| `SwiftBeansMacrosTests` | Expansion + static-`@Bean` diagnostics |
-| Generator unit tests | IR build + cycle/missing/duplicate on in-memory source strings (no full Xcode) |
+| `SwiftBeansTests` | Scope enum; registry: concurrent first access runs the factory once (counter + many tasks/threads), nested resolution, same instance per key, distinct keys independent |
+| `SwiftBeansGeneratorCoreTests` | Config parser + resolver (incl. module names / per-target grouping), plugin-copy drift guard. **Generator rules** via `SwiftBeansGeneration.generate(sources:)` on in-memory files: one test (or parameterized group) per SPEC scenario, asserting either output fragments or the exact sorted `rendered` diagnostics (ids, file, line, column). Focused units: `KeyNormalization` / `accessorName` table, initializer selection, import merging |
+| `SwiftBeansMacrosTests` | Expansion + diagnostics with positions (`assertMacroExpansion` `diagnostics:`) for every macro-owned rule, `@Inject` |
+| Generated-code compile check | Package tests assert output text only. The example app (which gains a local-package bean and nested / generic-collection / `any`-bound beans) is the compile check for generated code |
+| Example app (manual) | Source-discovery scenarios; local-package import + public-ness with a real build; Xcode shows `file:line:column` diagnostics as clickable issues |
 
 ## Example app (manual integration harness)
 
@@ -283,5 +518,9 @@ Runtime service locator, property injection, qualifiers, subcontexts, non-static
 ## Phase gate
 
 Phase 2 approved 2026-10-14. Proceed to Phase 3 (tests); scaffolding macro/plugin targets in `Package.swift` is allowed as needed for compiling tests.
+
+**Generator rules + Singleton storage revision (2026-10-15):** Phase 1 approved 2026-10-15. Phase 2 (this document: `SwiftBeansSyntaxRules`, diagnostics model, `TypeKey`, provider resolution, imports, `--input` JSON, registry algorithm) approved 2026-10-15. Phase 3 tests written 2026-10-15 (generator suites per SPEC section, `TypeKeyTests`, macro diagnostics, `SwiftBeansRegistryTests` incl. exit test); they compile and fail only against stubs. Phase 4 implemented 2026-10-15: `swift test` green (113 tests), example app builds and tests through the plugin's `--input` JSON. Legacy `BeanSourceParser` / `BeanGraphValidator` / `BeanCodeGenerator` / `Naming` removed; `SwiftBeansGeneratorCore` no longer depends on `SwiftBeans`. Still open from this document: the example does not yet carry a local-package / nested / generic-collection bean as the generated-code compile check (Testing seams).
+
+**Macro-owned misuse in the generator:** declarations that violate a macro-owned rule stay in the graph best-effort and are not reported again (e.g. a non-literal `scope:` is wired as singleton), so the only error the user sees is the macro's inline one.
 
 **Source discovery revision (2026-10-15):** Phases 2–4 done. Config errors are reported with `Diagnostics.error` alone (no rethrow): SPM and Xcode both fail the build on it, and rethrowing printed every message twice.

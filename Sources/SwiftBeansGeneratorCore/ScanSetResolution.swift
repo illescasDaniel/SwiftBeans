@@ -213,15 +213,51 @@ enum ScanConfigurationParser {
 	}
 }
 
+/// What the plugin hands the generator (`--input <file>.json`).
+public struct GeneratorInput: Sendable, Codable, Equatable {
+	/// Absolute paths of the target's own Swift sources.
+	public var targetSources: [String]
+	public var localPackages: [LocalPackageSources]
+
+	public init(targetSources: [String], localPackages: [LocalPackageSources] = []) {
+		self.targetSources = targetSources
+		self.localPackages = localPackages
+	}
+
+	public struct LocalPackageSources: Sendable, Codable, Equatable {
+		/// Swift module name of the package target.
+		public var module: String
+		/// Absolute paths of the target's Swift sources.
+		public var sources: [String]
+
+		public init(module: String, sources: [String]) {
+			self.module = module
+			self.sources = sources
+		}
+	}
+}
+
+/// The `.swift` files of one `local_packages` target.
+struct LocalPackageTargetSources: Equatable, Sendable {
+	/// Target name as written in the config.
+	var target: String
+	/// Swift module name of the target (SwiftPM's c99name).
+	var module: String
+	/// Sorted, standardized, symlink-resolved files.
+	var files: [URL]
+}
+
 enum ScanSetResolver {
-	/// Resolves `local_packages` to sorted, de-duplicated `.swift` files.
-	/// Paths are relative to `configDirectory`, standardized and symlink-resolved.
+	/// Resolves `local_packages` to one entry per listed target (in config order), each with its
+	/// sorted `.swift` files. Paths are relative to `configDirectory`, standardized and symlink-resolved.
+	/// A file reached through two entries is kept only in the first; entries left empty are omitted.
 	static func localPackageSources(
 		for configuration: SwiftBeansScanConfiguration,
 		configDirectory: URL,
 		fileManager: FileManager = .default
-	) throws(ScanConfigurationError) -> [URL] {
-		var filesByPath: [String: URL] = [:]
+	) throws(ScanConfigurationError) -> [LocalPackageTargetSources] {
+		var seenPaths = Set<String>()
+		var result: [LocalPackageTargetSources] = []
 		for package in configuration.localPackages {
 			let packageRoot = configDirectory
 				.appending(path: package.path, directoryHint: .isDirectory)
@@ -251,12 +287,32 @@ enum ScanSetResolver {
 						message: "\(entry) target '\(target)': no Sources/\(target) folder in \(packageRoot.path)"
 					)
 				}
-				for file in swiftFiles(in: sourcesRoot, fileManager) {
-					filesByPath[file.path] = file
+				let files = swiftFiles(in: sourcesRoot, fileManager)
+					.sorted { $0.path < $1.path }
+					.filter { seenPaths.insert($0.path).inserted }
+				if !files.isEmpty {
+					result.append(LocalPackageTargetSources(
+						target: target,
+						module: moduleName(forTarget: target),
+						files: files
+					))
 				}
 			}
 		}
-		return filesByPath.keys.sorted().compactMap { filesByPath[$0] }
+		return result
+	}
+
+	/// SwiftPM's c99name: characters not valid in a Swift identifier become `_`,
+	/// and a leading digit gets a `_` prefix.
+	static func moduleName(forTarget target: String) -> String {
+		var scalars = String.UnicodeScalarView()
+		for scalar in target.unicodeScalars {
+			scalars.append(scalar == "_" || scalar.properties.isXIDContinue ? scalar : "_")
+		}
+		if let first = scalars.first, first.properties.numericType != nil || !(first == "_" || first.properties.isXIDStart) {
+			scalars.insert("_", at: scalars.startIndex)
+		}
+		return String(scalars)
 	}
 
 	private static func isDirectory(_ url: URL, _ fileManager: FileManager) -> Bool {

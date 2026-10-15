@@ -1,0 +1,193 @@
+import Foundation
+
+/// One Swift file to scan, with where it came from.
+public struct SourceFile: Sendable, Equatable {
+	public enum Origin: Sendable, Equatable {
+		/// A source of the target the plugin is applied to.
+		case target
+		/// A source of a `.swiftbeans.yml` local package target, compiled as `module`.
+		case localPackage(module: String)
+	}
+
+	public var path: String
+	public var text: String
+	public var origin: Origin
+
+	public init(path: String, text: String, origin: Origin = .target) {
+		self.path = path
+		self.text = text
+		self.origin = origin
+	}
+}
+
+/// 1-based position in a scanned file.
+public struct SourcePosition: Sendable, Hashable, Comparable, CustomStringConvertible {
+	public var file: String
+	public var line: Int
+	public var column: Int
+
+	public init(file: String, line: Int, column: Int) {
+		self.file = file
+		self.line = line
+		self.column = column
+	}
+
+	public static func < (lhs: SourcePosition, rhs: SourcePosition) -> Bool {
+		(lhs.file, lhs.line, lhs.column) < (rhs.file, rhs.line, rhs.column)
+	}
+
+	/// `file:line:column`
+	public var description: String { "\(file):\(line):\(column)" }
+}
+
+/// A located generator error, warning or note.
+public struct GeneratorDiagnostic: Sendable, Equatable {
+	public enum Severity: String, Sendable {
+		case error
+		case warning
+		case note
+	}
+
+	public var severity: Severity
+	/// Stable identifier, e.g. `graph.missingDependency`.
+	public var id: String
+	public var location: SourcePosition
+	public var message: String
+	/// Related locations (severity `.note`).
+	public var notes: [GeneratorDiagnostic]
+
+	public init(
+		severity: Severity = .error,
+		id: String,
+		location: SourcePosition,
+		message: String,
+		notes: [GeneratorDiagnostic] = []
+	) {
+		self.severity = severity
+		self.id = id
+		self.location = location
+		self.message = message
+		self.notes = notes
+	}
+
+	/// `<file>:<line>:<column>: error: <message>`, then one line per note.
+	public var rendered: String {
+		([self] + notes)
+			.map { "\($0.location): \($0.severity.rawValue): \($0.message)" }
+			.joined(separator: "\n")
+	}
+}
+
+public struct GenerationResult: Sendable, Equatable {
+	/// Sorted by location, then message.
+	public var diagnostics: [GeneratorDiagnostic]
+	/// Generated Swift source; `nil` when `diagnostics` contains an error.
+	public var output: String?
+
+	public init(diagnostics: [GeneratorDiagnostic], output: String?) {
+		self.diagnostics = diagnostics
+		self.output = output
+	}
+
+	public var errors: [GeneratorDiagnostic] {
+		diagnostics.filter { $0.severity == .error }
+	}
+}
+
+public enum SwiftBeansGeneration {
+	/// Reads every file in `input`, then runs `generate(sources:)`.
+	///
+	/// Paths are de-duplicated after resolving symlinks; a file listed as both a target source and a
+	/// package source counts as a target source.
+	public static func generate(input: GeneratorInput, fileManager: FileManager = .default) -> GenerationResult {
+		var origins: [(path: String, origin: SourceFile.Origin)] = input.targetSources.map { ($0, .target) }
+		for package in input.localPackages {
+			origins += package.sources.map { ($0, .localPackage(module: package.module)) }
+		}
+		var seen = Set<String>()
+		var sources: [SourceFile] = []
+		var diagnostics: [GeneratorDiagnostic] = []
+		for (path, origin) in origins {
+			let resolved = URL(filePath: path).standardizedFileURL.resolvingSymlinksInPath().path
+			guard seen.insert(resolved).inserted else { continue }
+			guard let data = fileManager.contents(atPath: resolved), let text = String(data: data, encoding: .utf8) else {
+				diagnostics.append(GeneratorDiagnostic(
+					id: "input.unreadable",
+					location: SourcePosition(file: resolved, line: 1, column: 1),
+					message: "cannot read Swift source"
+				))
+				continue
+			}
+			sources.append(SourceFile(path: resolved, text: text, origin: origin))
+		}
+		guard diagnostics.isEmpty else {
+			return GenerationResult(diagnostics: diagnostics, output: nil)
+		}
+		return generate(sources: sources)
+	}
+
+	/// Scans, validates and generates from in-memory files.
+	public static func generate(sources: [SourceFile]) -> GenerationResult {
+		let files = sources
+			.sorted { $0.path < $1.path }
+			.map(DeclarationScanner.scan)
+
+		var diagnostics: [GeneratorDiagnostic] = []
+		let contexts = files.filter { $0.source.origin == .target }.flatMap(\.contexts)
+		if contexts.count > 1 {
+			let names = contexts.map { "'\($0.name)'" }.joined(separator: ", ")
+			for context in contexts {
+				diagnostics.append(GeneratorDiagnostic(
+					id: "context.multiple",
+					location: context.location,
+					message: "only one @ApplicationContext is allowed per target; found \(names)"
+				))
+			}
+		}
+
+		let (providers, resolverDiagnostics) = ProviderResolver.resolve(files)
+		diagnostics += resolverDiagnostics
+		// A target without a root context (e.g. a feature module) generates nothing to validate.
+		if contexts.count == 1 {
+			diagnostics += GraphValidator.validate(providers)
+		}
+
+		diagnostics = diagnostics
+			.map { diagnostic in
+				var diagnostic = diagnostic
+				diagnostic.notes.sort { ($0.location, $0.message) < ($1.location, $1.message) }
+				return diagnostic
+			}
+			.sorted { ($0.location, $0.message) < ($1.location, $1.message) }
+		guard !diagnostics.contains(where: { $0.severity == .error }) else {
+			return GenerationResult(diagnostics: diagnostics, output: nil)
+		}
+
+		var imports = files.flatMap(\.imports)
+		for provider in providers {
+			if case .localPackage(let module) = provider.origin {
+				imports.append(ImportRecord(module: module, testable: false, preconcurrency: false, condition: nil))
+			}
+		}
+		let output = CodeGenerator.generate(
+			context: contexts.count == 1 ? contexts[0] : nil,
+			providers: providers,
+			imports: imports
+		)
+		return GenerationResult(diagnostics: diagnostics, output: output)
+	}
+}
+
+/// Writes generated output only when it changes, so unchanged wiring does not trigger recompiles.
+public enum GeneratedFileWriter {
+	/// - Returns: `true` if the file was written, `false` if it already had these contents.
+	@discardableResult
+	public static func write(_ contents: String, to url: URL) throws -> Bool {
+		let data = Data(contents.utf8)
+		if let existing = try? Data(contentsOf: url), existing == data {
+			return false
+		}
+		try data.write(to: url, options: .atomic)
+		return true
+	}
+}
