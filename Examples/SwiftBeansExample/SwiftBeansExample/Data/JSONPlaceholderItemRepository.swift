@@ -13,31 +13,24 @@ final class JSONPlaceholderItemRepository: ItemRepository, Sendable {
 		self.httpClient = httpClient
 	}
 
-	func fetchItems() async -> [Item] {
-		do {
-			let request = try HTTPURLRequest(url: baseURL / "posts")
-			let posts: [JSONPlaceholderPostDTO] = try await httpClient.sendRequest(
-				request,
-				decoding: [JSONPlaceholderPostDTO].self,
-				decoder: decoder
-			)
-			return posts.prefix(10).map(\.asItem)
-		} catch {
-			return []
-		}
+	func fetchItems() async throws -> [Item] {
+		let request = try HTTPURLRequest(url: baseURL / "posts")
+		let posts: [JSONPlaceholderPostDTO] = try await httpClient.sendRequest(
+			request,
+			decoding: [JSONPlaceholderPostDTO].self,
+			decoder: decoder
+		)
+		return posts.prefix(10).map(\.asItem)
 	}
 
-	func fetchItem(id: Int) async -> Item? {
-		do {
-			let request = try HTTPURLRequest(url: baseURL / "posts" / id)
-			let post: JSONPlaceholderPostDTO = try await httpClient.sendRequest(
-				request,
-				decoding: JSONPlaceholderPostDTO.self,
-				decoder: decoder
-			)
-			return post.asItem
-		} catch {
-			return nil
-		}
+	/// Non-2xx responses (e.g. 404) already throw from HTTIES' decoding `sendRequest`.
+	func fetchItem(id: Int) async throws -> Item {
+		let request = try HTTPURLRequest(url: baseURL / "posts" / id)
+		let post: JSONPlaceholderPostDTO = try await httpClient.sendRequest(
+			request,
+			decoding: JSONPlaceholderPostDTO.self,
+			decoder: decoder
+		)
+		return post.asItem
 	}
 }

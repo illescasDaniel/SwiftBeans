@@ -8,18 +8,16 @@ _Last updated: 2026-10-15_
 
 ## Current focus
 
-Runtime arguments (`@Assisted`, assisted injection) implemented (Phases 3–4, 2026-10-15): `Assisted` wrapper, generator method accessors, `GeneratorAssistedTests`, example `ItemDetailViewModel` as compile check; uncommitted. Next: commit, then the assisted-factory injection backlog item. Review batches (generator rules, example compile check) are committed on `main` (`31d6864`, `20a1dcf`).
+Review backlog cleared (2026-10-15): example-app fixes, product surface (`SwiftBeansGeneratorCore` no longer a product, `package` access), README written, `.claude` symlinks to `.cursor` skills/rules. All uncommitted; `@Assisted` is committed (`25e0b04`). Verified: `swift test` 133, example macOS tests, iOS Simulator and Release builds.
 
 ## Just changed
 
-- `SwiftBeansSyntaxRules` + macros diagnose at nodes; `@Inject`
-- GeneratorCore: `DeclarationScanner`, `ProviderResolver`, `GraphValidator`, `CodeGenerator`, `TypeKey`; legacy parser/validator/codegen/`Naming` deleted; no dependency on `SwiftBeans`
-- CLI `--input <json>`; plugin writes `SwiftBeansInput.json` (write-if-changed); output written only when changed
-- `SwiftBeansRegistry`: NSCondition per-key once-only, re-entry traps
+- Example: Swift 6 mode, `@State` view models, `LoadState`, throwing `ItemRepository`, `#if DEBUG` fakes and Previews, Release `URLSession.shared`
+- `Package.swift`: products are only `SwiftBeans` + `SwiftBeansPlugin`
+- `README.md` (new)
 
 ## Next steps
 
-0. Commit the `@Assisted` work; then spec the assisted-factory injection backlog item
-1. Example-app fixes from the review (the generated-code compile check landed: `Packages/GreetingKit`, `Features.WelcomeBanner`, `TagSummary`, `tagCounts` bean; ARCHITECTURE line "Still open from this document…" can now be dropped)
-1. Optional: push `main` when ready
-2. Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / `FakeAppContext` pattern)
+1. Commit this batch when asked
+2. Spec assisted-factory injection (`(Item) -> ItemDetailViewModel`) — Phase 1
+3. Optional: push `main`

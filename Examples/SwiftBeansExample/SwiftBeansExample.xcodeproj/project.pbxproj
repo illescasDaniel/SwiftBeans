@@ -8,9 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		65E1D527307F8D36004D0768 /* SwiftBeans in Frameworks */ = {isa = PBXBuildFile; productRef = 65E1D526307F8D36004D0768 /* SwiftBeans */; };
-		A1HTTP010000000000000001 /* HTTIES in Frameworks */ = {isa = PBXBuildFile; productRef = A1HTTP020000000000000001 /* HTTIES */; };
 		A1GKIT010000000000000001 /* GreetingKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1GKIT020000000000000001 /* GreetingKit */; };
 		A1GKIT010000000000000002 /* GreetingKitLive in Frameworks */ = {isa = PBXBuildFile; productRef = A1GKIT020000000000000002 /* GreetingKitLive */; };
+		A1HTTP010000000000000001 /* HTTIES in Frameworks */ = {isa = PBXBuildFile; productRef = A1HTTP020000000000000001 /* HTTIES */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -378,7 +378,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -426,7 +426,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -450,7 +450,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftBeansExample.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwiftBeansExample";
 			};
@@ -475,7 +475,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftBeansExample.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SwiftBeansExample";
 			};
@@ -543,11 +543,6 @@
 			package = 65E1D525307F8D36004D0768 /* XCLocalSwiftPackageReference "Packages/SwiftBeans" */;
 			productName = "plugin:SwiftBeansPlugin";
 		};
-		A1HTTP020000000000000001 /* HTTIES */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */;
-			productName = HTTIES;
-		};
 		A1GKIT020000000000000001 /* GreetingKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A1GKIT030000000000000001 /* XCLocalSwiftPackageReference "Packages/GreetingKit" */;
@@ -557,6 +552,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1GKIT030000000000000001 /* XCLocalSwiftPackageReference "Packages/GreetingKit" */;
 			productName = GreetingKitLive;
+		};
+		A1HTTP020000000000000001 /* HTTIES */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1HTTP030000000000000001 /* XCRemoteSwiftPackageReference "HTTIES" */;
+			productName = HTTIES;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

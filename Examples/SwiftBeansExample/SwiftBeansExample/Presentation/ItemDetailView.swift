@@ -1,7 +1,20 @@
 import SwiftUI
 
 struct ItemDetailView: View {
-	@Bindable var viewModel: ItemDetailViewModel
+	@State private var viewModel: ItemDetailViewModel
+
+	init(viewModel: ItemDetailViewModel) {
+		_viewModel = State(initialValue: viewModel)
+	}
+
+	private var statusText: String {
+		switch viewModel.state {
+		case .idle: ""
+		case .loading: "Refreshing from API…"
+		case .loaded: "Loaded post #\(viewModel.item.id) via HTTIES"
+		case .failed(let message): "Showing seed data (refresh failed: \(message))"
+		}
+	}
 
 	var body: some View {
 		List {
@@ -13,7 +26,7 @@ struct ItemDetailView: View {
 			}
 
 			Section {
-				Text(viewModel.statusText)
+				Text(statusText)
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 			}
@@ -25,6 +38,7 @@ struct ItemDetailView: View {
 	}
 }
 
+#if DEBUG
 #Preview("ItemDetailView") {
 	let context = FakeAppContext()
 	NavigationStack {
@@ -33,3 +47,4 @@ struct ItemDetailView: View {
 		)
 	}
 }
+#endif

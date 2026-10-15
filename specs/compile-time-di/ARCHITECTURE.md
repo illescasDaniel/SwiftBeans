@@ -37,11 +37,20 @@ flowchart LR
 | `SwiftBeansSyntaxRules` | internal library (SwiftSyntax only) | Declaration-local rules shared by macros and generator: attribute recognition (including the non-macro `@Assisted` marker), scope literal, `@Bean` / `@Service` / `@Inject` shape checks. One implementation, so the macro and the generator never disagree |
 | `SwiftBeansGenerator` | executable | Parse the Swift files it is given; build IR graph; emit `SwiftBeansGenerated.swift`; emit diagnostics on failure. **Does not read `.swiftbeans.yml` or search for files.** |
 | `SwiftBeansPlugin` | build tool plugin | Own the scan set: read the build system's file list and `.swiftbeans.yml`, resolve local package sources, declare all of them as inputs, invoke the generator with the explicit file list |
-| `SwiftBeansGeneratorCore` | library (tests + generator) | Graph IR, parser, validator, codegen, diagnostics, and the scan-set resolver source of truth (see [Scan-set resolution](#scan-set-resolution)). Depends on `SwiftBeansSyntaxRules` + SwiftSyntax, **no longer on `SwiftBeans`** (it only needed `BeanScope`; scope is now parsed into the rules module's own enum). Still a package product until the later "product surface" batch; only `SwiftBeansGeneration` (below) is public |
+| `SwiftBeansGeneratorCore` | internal library (generator + tests) | Graph IR, parser, validator, codegen, diagnostics, and the scan-set resolver source of truth (see [Scan-set resolution](#scan-set-resolution)). Depends on `SwiftBeansSyntaxRules` + SwiftSyntax, **not on `SwiftBeans`** (scope is parsed into the rules module's own `ScopeLiteral`). **Not a product** (see [Product surface](#product-surface)); its entry points use `package` access |
 | `SwiftBeansTests` | tests | BDD scenarios against fixtures that apply the plugin (Phase 3+) |
 | `SwiftBeansMacrosTests` | tests | Macro expansion unit tests via SwiftSyntax |
 
 Consumers depend on product `SwiftBeans` and attach plugin `SwiftBeansPlugin` to the target that owns `@ApplicationContext`.
+
+### Product surface
+
+The package exports exactly two products: library `SwiftBeans` and plugin `SwiftBeansPlugin`. Everything else (`SwiftBeansMacros`, `SwiftBeansSyntaxRules`, `SwiftBeansGeneratorCore`, the `SwiftBeansGenerator` executable) is an implementation detail that consumers cannot import, so the generator IR and diagnostics model can change without a semver break.
+
+- **`SwiftBeansGeneratorCore` is no longer a library product.** Its only clients are the `SwiftBeansGenerator` executable and `SwiftBeansGeneratorCoreTests`, both in this package, which depend on the target directly.
+- **Access level:** the declarations it exposes across modules (`SwiftBeansGeneration`, `GeneratedFileWriter`, `GeneratorDiagnostic`, `TypeKey`, scanner/resolver types used by tests) become `package` instead of `public`. Exception: `ScanSetResolution.swift` keeps `public`, because it must stay byte-identical to the plugin's copy (`ScanSetResolutionDriftTests`) and a plugin script is compiled without a package name, so `package` would not compile there.
+- **`BeanScope` stays in `SwiftBeans`; no separate module.** The review item was that the generator linked the runtime only to read `BeanScope`. That dependency is already gone (`ScopeLiteral` in `SwiftBeansSyntaxRules`), and `BeanScope` is part of the macro signatures consumers write (`@Service(scope: .transient)`), so a separate module would only add an import for nothing.
+- **Verification:** `swift package describe` lists two products; `swift build` and `swift test` pass; the example app (which depends only on `SwiftBeans` + the plugin) builds and tests unchanged.
 
 ## Division of labor: macros vs generator
 
@@ -632,6 +641,8 @@ Phase 2 approved 2026-10-14. Proceed to Phase 3 (tests); scaffolding macro/plugi
 **Generator rules + Singleton storage revision (2026-10-15):** Phase 1 approved 2026-10-15. Phase 2 (this document: `SwiftBeansSyntaxRules`, diagnostics model, `TypeKey`, provider resolution, imports, `--input` JSON, registry algorithm) approved 2026-10-15. Phase 3 tests written 2026-10-15 (generator suites per SPEC section, `TypeKeyTests`, macro diagnostics, `SwiftBeansRegistryTests` incl. exit test); they compile and fail only against stubs. Phase 4 implemented 2026-10-15: `swift test` green (113 tests), example app builds and tests through the plugin's `--input` JSON. Legacy `BeanSourceParser` / `BeanGraphValidator` / `BeanCodeGenerator` / `Naming` removed; `SwiftBeansGeneratorCore` no longer depends on `SwiftBeans`. The example now carries the generated-code compile check (local package `GreetingKit`, nested, `[String: Int]` and `@Inject` beans).
 
 **Runtime arguments (`@Assisted`):** Phase 1 approved 2026-10-15. Phase 2 approved 2026-10-15 (the `Assisted` runtime contract, `SwiftBeansSyntaxRules.isAssisted`, scanner / resolver / validator / generator seams, and the testing plan above). Phases 3–4 implemented 2026-10-15 (`swift test`: 133 tests; example app green).
+
+**Product surface (2026-10-15):** Phase 2 proposed: drop the `SwiftBeansGeneratorCore` product, `package` access for its cross-module API, `BeanScope` module split closed as unnecessary. Approved and implemented 2026-10-15 (`swift test`: 133 tests; example green). No SPEC change (the SPEC never promised the generator library to consumers).
 
 **Macro-owned misuse in the generator:** declarations that violate a macro-owned rule stay in the graph best-effort and are not reported again (e.g. a non-literal `scope:` is wired as singleton), so the only error the user sees is the macro's inline one.
 

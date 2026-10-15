@@ -12,12 +12,12 @@ struct ItemDetailViewModelTests {
 		let context = FakeAppContext(itemRepository: StubItemRepository(items: [refreshed]))
 		let viewModel = context.itemDetailViewModel(item: seed)
 		#expect(viewModel.item == seed)
+		#expect(viewModel.state == .idle)
 
 		await viewModel.refresh()
 
 		#expect(viewModel.item == refreshed)
-		#expect(viewModel.isLoading == false)
-		#expect(viewModel.statusText.contains("HTTIES"))
+		#expect(viewModel.state == .loaded)
 	}
 
 	@Test
@@ -29,5 +29,21 @@ struct ItemDetailViewModelTests {
 
 		#expect(viewModel.item.id == 1)
 		#expect(viewModel.item.title.contains("sunt aut"))
+		#expect(viewModel.state == .loaded)
+	}
+
+	@Test
+	func `Given failing repository When refresh Then state is failed and seed item is kept`() async {
+		let seed = Item(id: 7, title: "Seed", detail: "Old")
+		let context = FakeAppContext(itemRepository: StubItemRepository(items: [], shouldThrow: true))
+		let viewModel = context.itemDetailViewModel(item: seed)
+
+		await viewModel.refresh()
+
+		guard case .failed = viewModel.state else {
+			Issue.record("Expected .failed, got \(viewModel.state)")
+			return
+		}
+		#expect(viewModel.item == seed)
 	}
 }

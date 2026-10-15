@@ -8,9 +8,9 @@ struct AppContextScopeTests {
 	@Test
 	func `Given singleton handler When resolved twice Then same instance`() {
 		let context = AppContext()
-		let first = context.httpDataRequestHandler as AnyObject
-		let second = context.httpDataRequestHandler as AnyObject
-		#expect(first === second)
+		let first = instanceID(of: context.httpDataRequestHandler)
+		let second = instanceID(of: context.httpDataRequestHandler)
+		#expect(first == second)
 	}
 
 	@Test
@@ -38,9 +38,9 @@ struct AppContextScopeTests {
 	}
 
 	@Test
-	func `Given configuration beans When fetching posts Then returns fake JSONPlaceholder data`() async {
+	func `Given configuration beans When fetching posts Then returns fake JSONPlaceholder data`() async throws {
 		let context = AppContext()
-		let items = await context.itemRepository.fetchItems()
+		let items = try await context.itemRepository.fetchItems()
 		#expect(items.count == 5)
 		#expect(items.first?.id == 1)
 	}

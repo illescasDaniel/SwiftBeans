@@ -1,5 +1,6 @@
 import GreetingKit
 
+#if DEBUG
 /// App-side `Greeter` for `FakeAppContext`. The live one (`GreetingKitLive.EnglishGreeter`)
 /// is only reachable through the generated context; no app file imports `GreetingKitLive`.
 nonisolated struct PreviewGreeter: Greeter {
@@ -7,3 +8,4 @@ nonisolated struct PreviewGreeter: Greeter {
 		"Hi, \(name) (preview)!"
 	}
 }
+#endif

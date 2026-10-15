@@ -2,11 +2,24 @@ import SwiftUI
 
 /// Explains why `@Configuration` / `@Bean` matter: wiring HTTIES + URLSession/fake.
 struct FeaturesDemoView: View {
-	@Bindable var viewModel: FeaturesDemoViewModel
-	let container: any AppContextProtocol
+	@State private var viewModel: FeaturesDemoViewModel
 
-	@State private var handlerA: ObjectIdentifier?
-	@State private var handlerB: ObjectIdentifier?
+	init(viewModel: FeaturesDemoViewModel) {
+		_viewModel = State(initialValue: viewModel)
+	}
+
+	private var isLoading: Bool {
+		viewModel.state == .loading
+	}
+
+	private var statusText: String {
+		switch viewModel.state {
+		case .idle: "Tap fetch to load post #1"
+		case .loading: "GET /posts/1 via HTTIES…"
+		case .loaded: "OK — post loaded"
+		case .failed(let message): "Request failed: \(message)"
+		}
+	}
 
 	var body: some View {
 		List {
@@ -30,58 +43,51 @@ struct FeaturesDemoView: View {
 					Text("JSONPlaceholderItemRepository")
 						.font(.caption.monospaced())
 				}
-				Text("Default handler is `FakeJSONPlaceholderDataHandler`. Change the bean to `URLSession.shared` for live jsonplaceholder.typicode.com.")
+				Text("DEBUG builds use `FakeJSONPlaceholderDataHandler`; other builds use `URLSession.shared` for live jsonplaceholder.typicode.com.")
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 			}
 
-			Section("Singleton handler (class)") {
-				Button("Resolve httpDataRequestHandler twice") {
-					handlerA = ObjectIdentifier(container.httpDataRequestHandler as AnyObject)
-					handlerB = ObjectIdentifier(container.httpDataRequestHandler as AnyObject)
-				}
-				if let handlerA, let handlerB {
-					LabeledContent("Same instance?") {
-						Text(handlerA == handlerB ? "yes ✓" : "no ✗")
-							.foregroundStyle(handlerA == handlerB ? .green : .red)
-					}
+			Section("Active handler bean") {
+				LabeledContent("Type") {
+					Text(viewModel.handlerDescription)
+						.font(.caption.monospaced())
 				}
 			}
 
 			Section("Generator coverage") {
-				Text(container.featuresWelcomeBanner.message)
+				Text(viewModel.welcomeBannerMessage)
 				Text("Nested `Features.WelcomeBanner` ← `any Greeter` from local package `GreetingKitLive` (auto-imported) + `TagSummary` (`@Inject` init taking `Dictionary<String, Int>` from a `[String: Int]` `@Bean`).")
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 			}
 
 			Section("HTTIES request") {
-				if viewModel.isLoading {
+				if isLoading {
 					ProgressView()
 				}
 				if let title = viewModel.sampleTitle {
 					Text(title)
 						.font(.headline)
 				}
-				Text(viewModel.statusText)
+				Text(statusText)
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 				Button("Fetch post #1") {
 					Task { await viewModel.fetchSamplePost() }
 				}
-				.disabled(viewModel.isLoading)
+				.disabled(isLoading)
 			}
 		}
 		.navigationTitle("HTTIES + @Bean")
 	}
 }
 
+#if DEBUG
 #Preview("FeaturesDemoView") {
 	let context = FakeAppContext()
 	NavigationStack {
-		FeaturesDemoView(
-			viewModel: context.featuresDemoViewModel,
-			container: context
-		)
+		FeaturesDemoView(viewModel: context.featuresDemoViewModel)
 	}
 }
+#endif

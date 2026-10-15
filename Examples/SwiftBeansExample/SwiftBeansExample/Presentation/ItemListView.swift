@@ -3,18 +3,35 @@ import SwiftUI
 /// View: depends only on `ItemListViewModel`; navigation goes through `AppCoordinator`.
 struct ItemListView: View {
 	@Environment(AppCoordinator.self) private var coordinator
-	@Bindable var viewModel: ItemListViewModel
+	@State private var viewModel: ItemListViewModel
+
+	init(viewModel: ItemListViewModel) {
+		_viewModel = State(initialValue: viewModel)
+	}
+
+	private var isLoading: Bool {
+		viewModel.state == .loading
+	}
+
+	private var statusText: String {
+		switch viewModel.state {
+		case .idle: "Tap refresh to load"
+		case .loading: "Loading…"
+		case .loaded: "\(viewModel.items.count) posts · HTTIES → Repository → UseCase → ViewModel"
+		case .failed(let message): "Failed to load posts: \(message)"
+		}
+	}
 
 	var body: some View {
 		List {
 			Section {
-				Text(viewModel.statusText)
+				Text(statusText)
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 			}
 
 			Section("Menu") {
-				if viewModel.isLoading && viewModel.items.isEmpty {
+				if isLoading && viewModel.items.isEmpty {
 					ProgressView()
 				}
 				ForEach(viewModel.items) { item in
@@ -49,7 +66,7 @@ struct ItemListView: View {
 				Button("Refresh") {
 					Task { await viewModel.refresh() }
 				}
-				.disabled(viewModel.isLoading)
+				.disabled(isLoading)
 			}
 		}
 		.task {
@@ -58,6 +75,7 @@ struct ItemListView: View {
 	}
 }
 
+#if DEBUG
 #Preview("ItemListView") {
 	let context = FakeAppContext()
 	let coordinator = AppCoordinator(container: context)
@@ -66,3 +84,4 @@ struct ItemListView: View {
 	}
 	.environment(coordinator)
 }
+#endif

@@ -4,15 +4,18 @@ import SwiftBeans
 
 /// `@Configuration` + `@Bean` for types we don’t own (HTTIES / Foundation).
 ///
-/// Swap `httpDataRequestHandler` to `URLSession.shared` to hit the real
-/// [JSONPlaceholder](https://jsonplaceholder.typicode.com) API.
+/// `httpDataRequestHandler` is the offline fake in DEBUG builds and `URLSession.shared`
+/// (the real [JSONPlaceholder](https://jsonplaceholder.typicode.com) API) otherwise.
 @Configuration
 enum AppConfiguration {
 	@Bean
 	static func httpDataRequestHandler() -> any HTTPDataRequestHandler {
+		#if DEBUG
 		// Offline-friendly default for demos, Previews, and CI.
-		// Live network: return URLSession.shared
 		FakeJSONPlaceholderDataHandler()
+		#else
+		URLSession.shared
+		#endif
 	}
 
 	@Bean

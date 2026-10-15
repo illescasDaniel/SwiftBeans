@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Product surface: two products only
+
+**Context:** Review flagged `SwiftBeansGeneratorCore` as a public product (generator IR leaking into semver) and suggested splitting `BeanScope` into its own module.
+
+**Decision:** Remove the `SwiftBeansGeneratorCore` product; its cross-module API uses `package` access, except `ScanSetResolution.swift`, which stays `public` to remain byte-identical with the plugin copy (plugins compile without a package name). Keep `BeanScope` in `SwiftBeans`.
+
+**Rationale:** The generator already stopped depending on the runtime (`ScopeLiteral`), and `BeanScope` is part of the macro signatures users write, so a separate module would only add an import.
+
 ## 2026-10-15 — Example local package split into interface + live targets
 
 **Context:** The example must prove the generator imports a local package module that no app file imports. But the generated `AppContextProtocol` makes the hand-written `FakeAppContext` (app target) name every key's type, so a single-target package type can never stay un-imported.

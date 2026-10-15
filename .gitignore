@@ -8,3 +8,5 @@ DerivedData/
 .swiftpm/xcode/xcuserdata/
 .netrc
 buildServer.json
+.claude/worktrees/
+.claude/settings.local.json

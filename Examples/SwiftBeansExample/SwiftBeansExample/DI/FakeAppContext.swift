@@ -1,6 +1,7 @@
 import GreetingKit
 import HTTIES
 
+#if DEBUG
 /// Hand-written stand-in for generated `AppContext`, conforming to `AppContextProtocol`.
 ///
 /// Use in SwiftUI Previews and tests that need the full graph without production wiring.
@@ -24,7 +25,11 @@ final class FakeAppContext: AppContextProtocol {
 	}
 
 	var featuresDemoViewModel: FeaturesDemoViewModel {
-		FeaturesDemoViewModel(httpClient: httpClient, repository: itemRepository)
+		FeaturesDemoViewModel(
+			repository: itemRepository,
+			welcomeBanner: featuresWelcomeBanner,
+			httpDataRequestHandler: httpDataRequestHandler
+		)
 	}
 
 	init(
@@ -49,3 +54,4 @@ final class FakeAppContext: AppContextProtocol {
 		self.featuresWelcomeBanner = Features.WelcomeBanner(greeter: greeter, summary: summary)
 	}
 }
+#endif

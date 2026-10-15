@@ -1,6 +1,7 @@
 import Foundation
 import HTTIES
 
+#if DEBUG
 /// In-memory stand-in for `URLSession` that serves JSONPlaceholder-shaped posts.
 ///
 /// Wired via `@Bean` so the rest of the graph (HTTIES `HTTPClient` → repository)
@@ -79,3 +80,4 @@ final class FakeJSONPlaceholderDataHandler: HTTPDataRequestHandler, Sendable {
 		return Int(parts[parts.count - 1])
 	}
 }
+#endif

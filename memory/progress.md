@@ -70,11 +70,15 @@
 
 - [x] Runtime arguments (`@Assisted`): Phases 1–4 done (2026-10-15). `Assisted` wrapper, `isAssisted` rules, scanner/resolver/validator/codegen, `GeneratorAssistedTests`; example `ItemDetailViewModel` uses `itemDetailViewModel(item:)` (`swift test` 133 tests green; example `xcodebuild test` + iOS Simulator build green)
 
+### Done (continued)
+
+- [x] Example-app review fixes: Swift 6 mode, `@State` view models, no context in views, `LoadState` (tests assert state, not copy), throwing repository, `#if DEBUG` fakes + Previews, Release uses `URLSession.shared` (2026-10-15)
+- [x] Product surface: `SwiftBeansGeneratorCore` no longer a product, `package` access; `BeanScope` split closed as unnecessary (2026-10-15)
+- [x] README with installation, concepts, scopes, `@Inject`, `@Assisted`, `{Context}Protocol` fakes, `.swiftbeans.yml`, rules (2026-10-15)
+- [x] `.claude/skills` and `.claude/rules/*.md` symlinked to `.cursor/` (2026-10-15)
+
 ### Open
 
 - [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
 
-- [ ] Review architecture batch: non-public GeneratorCore product, BeanScope module split
-- [ ] Review example-app fixes (SWIFT_VERSION 6, @State view models, no container in views, unused httpClient, `#if DEBUG` fakes, repository error handling, tests not asserting UI copy)
 - [ ] Push `main` when ready (optional)
-- [ ] Docs / README usage polish for compile-time DI (include HTTIES `@Bean` + `AppContextProtocol` / FakeAppContext pattern)

@@ -18,10 +18,6 @@ let package = Package(
 			name: "SwiftBeans",
 			targets: ["SwiftBeans"]
 		),
-		.library(
-			name: "SwiftBeansGeneratorCore",
-			targets: ["SwiftBeansGeneratorCore"]
-		),
 		.plugin(
 			name: "SwiftBeansPlugin",
 			targets: ["SwiftBeansPlugin"]

@@ -11,18 +11,19 @@ final class ItemListViewModel {
 	private let fetchItems: FetchItemsUseCase
 
 	private(set) var items: [Item] = []
-	private(set) var isLoading = false
-	private(set) var statusText = "Tap refresh to load"
+	private(set) var state: LoadState = .idle
 
 	init(fetchItems: FetchItemsUseCase) {
 		self.fetchItems = fetchItems
 	}
 
 	func refresh() async {
-		isLoading = true
-		statusText = "Loading…"
-		items = await fetchItems.execute()
-		isLoading = false
-		statusText = "\(items.count) posts · HTTIES → Repository → UseCase → ViewModel"
+		state = .loading
+		do {
+			items = try await fetchItems.execute()
+			state = .loaded
+		} catch {
+			state = .failed(error.localizedDescription)
+		}
 	}
 }

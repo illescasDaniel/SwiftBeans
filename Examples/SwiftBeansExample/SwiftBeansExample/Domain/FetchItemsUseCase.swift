@@ -10,7 +10,7 @@ final class FetchItemsUseCase: Sendable {
 		self.repository = repository
 	}
 
-	func execute() async -> [Item] {
-		await repository.fetchItems()
+	func execute() async throws -> [Item] {
+		try await repository.fetchItems()
 	}
 }

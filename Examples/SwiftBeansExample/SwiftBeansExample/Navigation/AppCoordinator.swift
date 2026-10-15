@@ -26,10 +26,7 @@ final class AppCoordinator {
 		case .itemDetail(let item):
 			ItemDetailView(viewModel: container.itemDetailViewModel(item: item))
 		case .featuresDemo:
-			FeaturesDemoView(
-				viewModel: container.featuresDemoViewModel,
-				container: container
-			)
+			FeaturesDemoView(viewModel: container.featuresDemoViewModel)
 		}
 	}
 }

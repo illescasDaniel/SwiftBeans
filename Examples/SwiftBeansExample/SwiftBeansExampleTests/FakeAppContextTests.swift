@@ -8,9 +8,9 @@ struct FakeAppContextTests {
 	@Test
 	func `Given default FakeAppContext When resolving handler twice Then same instance`() {
 		let context = FakeAppContext()
-		let first = context.httpDataRequestHandler as AnyObject
-		let second = context.httpDataRequestHandler as AnyObject
-		#expect(first === second)
+		let first = instanceID(of: context.httpDataRequestHandler)
+		let second = instanceID(of: context.httpDataRequestHandler)
+		#expect(first == second)
 		#expect(context.httpDataRequestHandler is FakeJSONPlaceholderDataHandler)
 	}
 
@@ -24,12 +24,12 @@ struct FakeAppContextTests {
 	}
 
 	@Test
-	func `Given stub repository When injecting into FakeAppContext Then use case uses stub`() async {
+	func `Given stub repository When injecting into FakeAppContext Then use case uses stub`() async throws {
 		let stub = StubItemRepository(items: [
 			Item(id: 99, title: "Injected", detail: "Via FakeAppContext"),
 		])
 		let context = FakeAppContext(itemRepository: stub)
-		let items = await context.fetchItemsUseCase.execute()
+		let items = try await context.fetchItemsUseCase.execute()
 		#expect(items.map(\.id) == [99])
 	}
 }
