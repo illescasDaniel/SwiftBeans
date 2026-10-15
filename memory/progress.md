@@ -81,4 +81,22 @@
 
 - [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
 
-- [ ] Push `main` when ready (optional)
+- [x] Published as public repo `illescasDaniel/SwiftBeans`, MIT license, tag + release `0.1.0` (2026-10-15)
+
+### Possible future improvements (to review; each needs its own spec)
+
+Suggested order: CI first, then factory injection, then qualifiers.
+
+- [ ] CI: GitHub Action running `swift test` + example macOS and iOS Simulator builds; tagged releases (semver, stay `0.x` while the API may break) and a CHANGELOG
+- [ ] Factory injection (same item as the backlog above): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
+- [ ] Qualifiers: `@Bean(named: "snakeCase")` / `@Service(named:)` + `@Qualifier("snakeCase") decoder: JSONDecoder`. Notes from the 2026-10-15 discussion:
+	- Key is (type, qualifier), not a global name: `snakeCase` on `JSONDecoder` and on `JSONEncoder` are different beans
+	- Unqualified bean is the default; unknown (type, name) pair is a build error at the parameter; names must be string literals
+	- Unqualified parameter with only named beans of that type → build error (no implicit single-candidate pick)
+	- Accessor = qualifier + type (`snakeCaseJSONDecoder`); collision with a real type's accessor is a build error at both declarations (no numeric suffixes: unstable, unreadable). Maybe later: `accessor:` override
+	- `@Qualifier` as a marker property wrapper on parameters (same trick as `@Assisted`); works with protocol-bound beans; `{Context}Protocol` gains qualified accessors
+	- Acceptance criterion: a graph without qualifiers generates byte-identical output to today
+- [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
+- [ ] Graph dump: plugin emits a Markdown/DOT file of the resolved graph for debugging and onboarding
+- [ ] Fix known limitation: a new file in a local package may need a clean build before it joins the graph
+- [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)

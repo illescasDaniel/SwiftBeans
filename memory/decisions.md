@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
+
+**Context:** First public release of the package on GitHub (`illescasDaniel/SwiftBeans`).
+
+**Decision:** Tag `0.1.0` and stay below `1.0.0` while the API is still settling; any `0.x` minor bump may break the API. README tells users to pin with `.upToNextMinor(from:)`. License is MIT.
+
+**Rationale:** SPM's `from:` allows any version below the next major, which for `0.x` would pull in breaking minors; `upToNextMinor` limits users to patch releases.
+
 ## 2026-10-15 — Product surface: two products only
 
 **Context:** Review flagged `SwiftBeansGeneratorCore` as a public product (generator IR leaking into semver) and suggested splitting `BeanScope` into its own module.

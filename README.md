@@ -35,13 +35,15 @@ Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Ca
 
 ## Installation
 
+SwiftBeans is pre-1.0: any `0.x` minor release may break the API, so pin with `.upToNextMinor` rather than `from:`.
+
 The package exports two products: the `SwiftBeans` library and the `SwiftBeansPlugin` build tool plugin. Attach the plugin to the target that declares your `@ApplicationContext`.
 
 ### Swift Package Manager
 
 ```swift
 dependencies: [
-	.package(url: "<SwiftBeans repository URL>", branch: "main"),
+	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.1.0")),
 ],
 targets: [
 	.target(
@@ -281,3 +283,7 @@ cd Examples/SwiftBeansExample && xcodebuild test -project SwiftBeansExample.xcod
 - [SPEC](specs/compile-time-di/SPEC.md): behavior, generator rules and acceptance scenarios.
 - [ARCHITECTURE](specs/compile-time-di/ARCHITECTURE.md): module seams, generator pipeline, generated code shape.
 - [AGENTS.md](AGENTS.md): how this repo is developed (spec-driven, phase gates).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
