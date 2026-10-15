@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Graph dump files are written by the generator but not declared as plugin outputs
+
+**Context:** Graph dump adds `SwiftBeansGraph.md` / `SwiftBeansGraph.dot` next to `SwiftBeansGenerated.swift`. Declaring them in the build command's `outputFiles` made SwiftPM copy them into a `<Package>_<Target>.bundle` (unknown output types become resources), giving every consumer target a resource bundle.
+
+**Decision:** The plugin passes `--graph-markdown` / `--graph-dot` paths to the generator but lists only `SwiftBeansGenerated.swift` in `outputFiles`. v1 always emits on success; no `.swiftbeans.yml` toggle yet.
+
+**Rationale:** A resource bundle in app targets is a worse side effect than the build system not tracking a debug artifact. Trade-off: deleting a graph file by hand does not rerun the generator until an input changes. Content is generated in `SwiftBeansGeneratorCore` (`GraphDump`) so it is unit-tested from fixture sources.
+
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 
 **Context:** First public release of the package on GitHub (`illescasDaniel/SwiftBeans`).

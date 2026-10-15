@@ -77,6 +77,10 @@
 - [x] README with installation, concepts, scopes, `@Inject`, `@Assisted`, `{Context}Protocol` fakes, `.swiftbeans.yml`, rules (2026-10-15)
 - [x] `.claude/skills` and `.claude/rules/*.md` symlinked to `.cursor/` (2026-10-15)
 
+### Done (continued)
+
+- [x] Linux fixes: generator stderr via `FileHandle` (Swift 6 rejects `fputs(_, stderr)`); `GeneratedFileWriterTests` mtime compared with 1 s tolerance (2026-10-15)
+
 ### Open
 
 - [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
@@ -97,7 +101,7 @@ Suggested order: CI first, then factory injection, then qualifiers.
 	- `@Qualifier` as a marker property wrapper on parameters (same trick as `@Assisted`); works with protocol-bound beans; `{Context}Protocol` gains qualified accessors
 	- Acceptance criterion: a graph without qualifiers generates byte-identical output to today
 - [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
-- [ ] Graph dump: plugin emits a Markdown/DOT file of the resolved graph for debugging and onboarding
+- [x] Graph dump: generator/plugin emit `SwiftBeansGraph.md` + `SwiftBeansGraph.dot` on success (`specs/graph-dump/SPEC.md`; 145 tests green on Linux; SPM e2e verified). Future: `.swiftbeans.yml` toggle (2026-10-15)
 - [ ] Fix known limitation: a new file in a local package may need a clean build before it joins the graph
 - [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)
 - [ ] Investigate Spring-style inter-bean calls (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:

@@ -548,9 +548,11 @@ No folder walking of the target, no source-root inference, no file-name markers.
 ### Generator CLI
 
 ```
-SwiftBeansGenerator --output <file> --input <generator-input.json>
-SwiftBeansGenerator --output <file> <source.swift>...      # debugging: all files are target sources
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --input <generator-input.json>
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] <source.swift>...      # debugging: all files are target sources
 ```
+
+- `--graph-markdown` / `--graph-dot` write the resolved-graph dumps (`GraphDump` in `SwiftBeansGeneratorCore`; `specs/graph-dump/SPEC.md`). They are written only on success, with the same write-if-changed rule as `--output`.
 
 - The plugin writes `GeneratorInput` as JSON to `<pluginWorkDirectory>/SwiftBeansInput.json` (only when its bytes change) and passes `--input`. This replaces one argument per file, which could exceed the OS argument-length limit on large apps, and carries each local package file's module.
 - The JSON file is a declared input too, so a re-planned file list reruns the generator.
@@ -607,7 +609,7 @@ On a `ScanConfigurationError` the plugin emits `Diagnostics.error(message, file:
 
 ### Plugin shape
 
-`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that resolves the config, writes `SwiftBeansInput.json`, and returns the single `.buildCommand` (`--output`, `--input`; inputs = target sources ∪ package sources ∪ config ∪ input JSON).
+`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that resolves the config, writes `SwiftBeansInput.json`, and returns the single `.buildCommand` (`--output`, `--graph-markdown`, `--graph-dot`, `--input`; inputs = target sources ∪ package sources ∪ config ∪ input JSON; declared output = `SwiftBeansGenerated.swift` only, the graph files are written beside it undeclared so SwiftPM does not bundle them as resources).
 
 ### Known limitation
 

@@ -83,10 +83,21 @@ package struct GenerationResult: Sendable, Equatable {
 	package var diagnostics: [GeneratorDiagnostic]
 	/// Generated Swift source; `nil` when `diagnostics` contains an error.
 	package var output: String?
+	/// `SwiftBeansGraph.md` contents; `nil` whenever `output` is.
+	package var graphMarkdown: String?
+	/// `SwiftBeansGraph.dot` contents; `nil` whenever `output` is.
+	package var graphDot: String?
 
-	package init(diagnostics: [GeneratorDiagnostic], output: String?) {
+	package init(
+		diagnostics: [GeneratorDiagnostic],
+		output: String?,
+		graphMarkdown: String? = nil,
+		graphDot: String? = nil
+	) {
 		self.diagnostics = diagnostics
 		self.output = output
+		self.graphMarkdown = graphMarkdown
+		self.graphDot = graphDot
 	}
 
 	package var errors: [GeneratorDiagnostic] {
@@ -174,7 +185,12 @@ package enum SwiftBeansGeneration {
 			providers: providers,
 			imports: imports
 		)
-		return GenerationResult(diagnostics: diagnostics, output: output)
+		return GenerationResult(
+			diagnostics: diagnostics,
+			output: output,
+			graphMarkdown: GraphDump.markdown(context: contexts.count == 1 ? contexts[0] : nil, providers: providers),
+			graphDot: GraphDump.dot(providers: providers)
+		)
 	}
 }
 

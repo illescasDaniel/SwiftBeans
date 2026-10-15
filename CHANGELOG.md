@@ -7,6 +7,7 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 ### Added
 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
+- Graph dump: after a successful generation the plugin writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot` (Graphviz) next to `SwiftBeansGenerated.swift`. The generator CLI gains `--graph-markdown` / `--graph-dot`.
 
 ## [0.1.0] - 2026-10-15
 
