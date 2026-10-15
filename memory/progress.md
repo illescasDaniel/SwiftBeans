@@ -98,7 +98,7 @@ Suggested order: CI first, then factory injection, then qualifiers.
 	- Acceptance criterion: a graph without qualifiers generates byte-identical output to today
 - [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
 - [ ] Graph dump: plugin emits a Markdown/DOT file of the resolved graph for debugging and onboarding
-- [ ] Fix known limitation: a new file in a local package may need a clean build before it joins the graph
+- [x] Fix known limitation: a new file in a local package may need a clean build before it joins the graph (2026-10-15): generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs (SwiftPM rejects source-built prebuild commands; see decisions). Xcode behavior unverified (no Xcode on Linux)
 - [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)
 - [ ] Investigate Spring-style inter-bean calls (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance

@@ -8,6 +8,10 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
 
+### Fixed
+
+- A new `.swift` file in a `.swiftbeans.yml` local package (or a `.swiftbeans.yml` created later) joins the graph without a clean build: the generator re-reads the config and re-walks the packages on every run.
+
 ## [0.1.0] - 2026-10-15
 
 First public release.
