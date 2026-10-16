@@ -1,6 +1,6 @@
 # Active Context
 
-_Last updated: 2026-10-15_
+_Last updated: 2026-10-16_
 
 ## Branch
 
@@ -8,17 +8,16 @@ _Last updated: 2026-10-15_
 
 ## Current focus
 
-Factory injection (`specs/factory-injection/SPEC.md`): bean parameters `(Item) -> ItemDetailViewModel` (assisted factory) and `() -> T` (deferred factory). Implemented and tested on Linux; spec was written together with the implementation and still awaits human review.
+PR #6 factory injection validated on macOS in worktree `pr-6-factory-injection`. Already green — no code fixes. Spec still Draft pending human review.
 
 ## Just changed
 
-- Generator: `FactoryType` / `FactoryNormalization` (`TypeKey.swift`), `FactoryBinding.swift`, `BeanParameter.factory`, `GraphValidator` step 3b (`factory.unresolved`, `graph.missingDependency`), cycle detection ignores factory params, `CodeGenerator` emits closures; scanner stores `factory` / `canonicalType`
-- `GeneratorFactoryInjectionTests` (+ byte-identical baseline, verified against `main`)
-- Example: `AppCoordinator` is a transient `@Service` taking `makeItemList` / `makeItemDetail` / `makeFeaturesDemo` factories; `FakeAppContext.appCoordinator`; tests updated (example not compiled on Linux: SwiftUI)
-- `GeneratedFileWriterTests`: 1s mtime tolerance (Linux); `SwiftBeansGeneratorMain` Linux `FileHandle.standardError` fix kept
+- Validated (2026-10-16): `swift test` 125/125; example macOS `xcodebuild test` + iOS Simulator build green
+- CI on PR already green (Package tests + Example app + GitGuardian)
+- HEAD `afa3e24` — no new commits (already green)
 
 ## Next steps
 
-1. Review `specs/factory-injection/SPEC.md`
-2. Run the example's `xcodebuild test` and iOS Simulator build on macOS (not verifiable on Linux)
+1. Human review / approve `specs/factory-injection/SPEC.md`
+2. Merge PR #6 when ready (do not merge from agent unless asked)
 3. Qualifiers is next in the suggested order
