@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-16 — feature/improvements: merge order and BeanKey cross-feature seams
+
+**Context:** Seven draft PRs (local-package scan, inter-bean diagnostic, graph dump, qualifiers, factory injection, collection injection, child-contexts SPEC) needed a single integration branch without closing the PRs.
+
+**Decision:** Create `feature/improvements` from `main` and merge in order #3 → #4 → #2 → #7 → #6 → #5, then #1. Qualifiers (`BeanKey`) land before factory and collection so those features adapt once. On the stack: factories resolve against the **unqualified** provider of the return type (`BeanKey(type)`); collection membership is by **type** (and declared conformances), so named providers of an element type join `[any P]` / `[P]`. Plugin keeps `--request` from #3 and adds `--graph-markdown` / `--graph-dot` from #2.
+
+**Rationale:** Landing `BeanKey` before factories/collections avoids rebasing those PRs twice. Unqualified factory lookup and type-based collection membership match the qualifier rules (no silent pick of a sole named bean for a plain parameter; collections still gather every implementation of `P`).
+
 ## 2026-10-15 — Local package scan: generator re-resolves every run; prebuild rejected by SwiftPM
 
 **Context:** `createBuildCommands` froze the local-package file list at plan time, so a new `.swift` file in a `.swiftbeans.yml` package needed a clean build. The planned fix was a `prebuildCommand` that runs every build.
@@ -42,6 +50,13 @@
 **Decision:** A `[E]` parameter with no `[E]` provider multi-binds `[self.a, self.b]`: members are non-assisted providers whose key is `E` or whose key names a scanned type declaring `E` in an inheritance clause (own declaration or extension, transitively through superclasses / sub-protocols), excluding the consumer, sorted by accessor name. An explicit `[E]` bean wins. `[any E]` with no members gets `[]`; plain `[E]` (e.g. `[String]`) stays a missing dependency. A `boundTo: Q` service is a member only via `Q`'s own conformances, never via its concrete type's (its accessor is typed `any Q`). One `ParameterInjection` value is shared by validator and codegen so both agree.
 
 **Rationale:** Spring-like assignability without touching the duplicate rule, accessors, `{Context}Protocol` or qualifiers; graphs that built before keep byte-identical output, except a defaulted `[E]` parameter that now receives existing members.
+## 2026-10-15 — Child contexts (draft): compile-time tree, ARC lifetime, child sees parent via its protocol
+
+**Context:** Backlog item "child contexts" (logged-in-user scope created and destroyed at runtime). v1 spec deferred "Subcontexts" and "Context arguments".
+
+**Decision (proposed in `specs/child-contexts/SPEC.md`, pending approval):** `@ChildContext(of: Parent.self)` classes, each with its own `SwiftBeansRegistry`; beans are assigned with `in: Context.self` (default root, so existing output is byte-identical); the child holds its parent strongly as `any {Parent}Protocol` (fakes work); visibility is one-way (child sees parent, never the reverse, siblings isolated) and validated at build time; disposal is ARC deallocation with no explicit hooks in the MVP; context inputs (`@ContextInput`) are providers inside the child. Delivery: phase 0 root inputs, A single-level MVP, B factory/ergonomics, C nesting, D hooks/overrides.
+
+**Rationale:** Dagger/Needle-style compile-time subcomponents keep the no-runtime-locator rule; reusing the registry and the protocol existential needs no new runtime types and keeps tests/Previews possible with hand-written fakes; ARC teardown matches the "release child = release singletons" goal with the least API.
 
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 

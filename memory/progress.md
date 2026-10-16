@@ -90,18 +90,21 @@
 
 ### Possible future improvements (to review; each needs its own spec)
 
-Suggested order: CI first, then factory injection, then qualifiers.
+Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 → #4 → #2 → #7 → #6 → #5, then #1.
 
 - [x] CI: GitHub Action (`.github/workflows/ci.yml`, `xcode-27` runner, Xcode 27.0) running `swift test` + example macOS tests and iOS Simulator build; README badge; `CHANGELOG.md` (2026-10-15). Releases stay semver `0.x` while the API may break
-- [x] Factory injection (same item as the backlog above; `specs/factory-injection/SPEC.md`, 2026-10-15): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles). Factories resolve against the unqualified provider of the return type.
-- [x] Qualifiers: `@Bean(named:)` / `@Service(named:)` + `@Qualifier("…")` — `specs/qualifiers/SPEC.md`, `BeanKey`, generator + tests (2026-10-15). Optional later: `accessor:` override; example-app demo
-- [x] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol — `specs/collection-injection/SPEC.md`, `ParameterInjection`, `GeneratorCollectionTests` (spec approval still pending). Named providers of the element type join collections by type.
-- [x] Graph dump: generator/plugin emit `SwiftBeansGraph.md` + `SwiftBeansGraph.dot` on success (`specs/graph-dump/SPEC.md`). Future: `.swiftbeans.yml` toggle (2026-10-15)
-- [x] Fix known limitation: a new file in a local package may need a clean build before it joins the graph (2026-10-15): generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs (SwiftPM rejects source-built prebuild commands; see decisions). Xcode behavior unverified (no Xcode on Linux)
+- [x] Factory injection (`specs/factory-injection/SPEC.md`): `(Item) -> ItemDetailViewModel` and deferred `() -> T`. Factories resolve against the unqualified provider of the return type.
+- [x] Qualifiers (`specs/qualifiers/SPEC.md`): `@Bean(named:)` / `@Service(named:)` + `@Qualifier("…")`, `BeanKey`. Optional later: `accessor:` override; example-app demo
+- [x] Collection injection (`specs/collection-injection/SPEC.md`): `[any P]` / `[P]` multi-bind via `ParameterInjection` (spec approval still pending). Named providers of the element type join collections by type.
+- [x] Graph dump (`specs/graph-dump/SPEC.md`): `SwiftBeansGraph.md` + `SwiftBeansGraph.dot`. Future: `.swiftbeans.yml` toggle
+- [x] Local-package scan refresh: generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs
+- [x] Inter-bean call diagnostic (`specs/inter-bean-call-diagnostic/SPEC.md`): warning `bean.directCall`
+- [x] Child contexts Phase 1: `specs/child-contexts/SPEC.md` drafted (+ proposed `ARCHITECTURE.md` stub); awaiting approval
+- [ ] **Next: integration test of `feature/improvements`** — run full `swift test` (+ example app when practical) on the merged stack; fix any cross-feature regressions
 - [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
-- [ ] Example app: adopt collection injection (e.g. analytics trackers) as the generated-code compile check on macOS/iOS
-- [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)
-- [ ] Investigate Spring-style inter-bean calls (diagnostic slice done, see Done; remaining: proxies / instance `@Bean` / macro rewriting, options in `specs/inter-bean-call-diagnostic/SPEC.md` Future work) (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
+- [ ] Example app: adopt collection injection / factories / qualifiers as generated-code compile checks on macOS/iOS
+- [ ] Child contexts: approval, Phase 2 contracts, tests, implementation (Phases 0 / A / B–D per the spec; see open questions first)
+- [ ] Investigate Spring-style inter-bean calls (diagnostic slice done; remaining: proxies / instance `@Bean` / macro rewriting, options in `specs/inter-bean-call-diagnostic/SPEC.md` Future work) (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance
 	- Swift has no runtime subclass proxies, and `enum`/`struct` configurations can't be overridden; candidates: macro-rewritten bodies, a configuration instance owned by the context that forwards to accessors, or generating a subclass of a `class` configuration
 	- ~~Cheap first step regardless: a build diagnostic when a `@Bean` body calls another `@Bean` directly, suggesting a parameter instead~~ (done: warning `bean.directCall`)
