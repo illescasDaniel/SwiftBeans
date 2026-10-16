@@ -50,6 +50,20 @@ struct TypeKeyTests {
 	}
 
 	@Test(arguments: [
+		("[any Store]", true),
+		("[(any Store)]", true),
+		("Array<any Store>", true),
+		("([any Store])", true),
+		("[Store]", false),
+		("any Store", false),
+		("[[any Store]]", false),
+		("[String: any Store]", false),
+	])
+	func `Given a spelling When checked Then any is recorded for an array element`(spelling: String, elementSpelledWithAny: Bool) {
+		#expect(KeyNormalization.elementSpelledWithAny(forSpelling: spelling) == elementSpelledWithAny)
+	}
+
+	@Test(arguments: [
 		("Logger?", UnsupportedKey.Reason.optional),
 		("Optional<Logger>", .optional),
 		("Logger!", .implicitlyUnwrappedOptional),

@@ -48,13 +48,13 @@ enum CodeGenerator {
 				? "\tfunc \(provider.key.accessorName)(\(signature(provider))) -> \(typeName(provider.key))"
 				: "\tvar \(provider.key.accessorName): \(typeName(provider.key)) { get }"
 		}
-		let accessors = sorted.map { provider in
+		let injection = ParameterInjection(sorted)
+		let accessors = sorted.indices.map { index in
+			let provider = sorted[index]
 			let arguments = provider.parameters.compactMap { parameter -> String? in
 				let value: String
 				if let assisted = parameter.assisted {
 					value = assisted.internalName
-				} else if let key = parameter.key, provided.contains(key) {
-					value = "self.\(key.accessorName)"
 				} else if let factory = parameter.factory {
 					switch FactoryBinding.resolve(factory, providersByKey: { firstByType[$0] }) {
 					case .deferred(let target), .assisted(let target):
@@ -63,7 +63,14 @@ enum CodeGenerator {
 						return nil
 					}
 				} else {
-					return nil
+					switch injection.injection(for: parameter, of: index) {
+					case .key(let key) where provided.contains(key):
+						value = "self.\(key.accessorName)"
+					case .collection(let members):
+						value = "[" + members.map { "self.\(sorted[$0].key.accessorName)" }.joined(separator: ", ") + "]"
+					default:
+						return nil
+					}
 				}
 				return parameter.label.map { "\($0): \(value)" } ?? value
 			}.joined(separator: ", ")

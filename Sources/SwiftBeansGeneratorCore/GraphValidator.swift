@@ -58,10 +58,11 @@ enum GraphValidator {
 				}
 		}
 
-		// 3. Missing dependencies.
-		for provider in providers {
+		// 3. Missing dependencies (a `[E]` parameter may be supplied by the members of `E`).
+		let injection = ParameterInjection(providers)
+		for (index, provider) in providers.enumerated() {
 			for parameter in provider.parameters {
-				guard let key = parameter.key, !parameter.hasDefault, byKey[key] == nil else { continue }
+				guard let key = parameter.key, !parameter.hasDefault, injection.injection(for: parameter, of: index) == nil else { continue }
 				// An unqualified parameter never picks a named provider, even a single one.
 				let named = key.qualifier == nil ? providers.filter { $0.key.type == key.type } : []
 				if !named.isEmpty {
@@ -132,10 +133,18 @@ enum GraphValidator {
 			}
 		}
 
-		// 5. Cycles over injected edges (an assisted provider is never a dependency; factories are lazy and add no edge).
-		let edges = providers.map { provider in
-			provider.parameters.compactMap { parameter in
-				parameter.key.flatMap { byKey[$0]?.first }.flatMap { providers[$0].isAssisted ? nil : $0 }
+		// 5. Cycles over injected edges (assisted never; factories lazy; collections depend on every member).
+		let edges = providers.indices.map { index in
+			providers[index].parameters.flatMap { parameter -> [Int] in
+				if parameter.factory != nil { return [] }
+				switch injection.injection(for: parameter, of: index) {
+				case .key(let key):
+					byKey[key].flatMap { providers[$0[0]].isAssisted ? nil : [$0[0]] } ?? []
+				case .collection(let members):
+					members
+				case nil:
+					[]
+				}
 			}
 		}
 		for component in StronglyConnectedComponents.find(nodeCount: providers.count, edges: edges) {

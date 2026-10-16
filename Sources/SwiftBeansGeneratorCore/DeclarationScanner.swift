@@ -63,11 +63,14 @@ struct TypeDecl {
 	/// A stored property carries an attribute (property wrapper) — no usable memberwise init.
 	var hasWrappedProperty: Bool
 	var location: SourcePosition
+	/// Supported keys in the inheritance clause (superclass, protocols), for collection membership.
+	var inheritedTypes: [TypeKey]
 }
 
 struct ExtensionDecl {
 	var extendedName: String
 	var initializers: [InitializerInfo]
+	var inheritedTypes: [TypeKey]
 }
 
 struct InitializerInfo {
@@ -92,6 +95,8 @@ struct ParameterInfo {
 	var typeLocation: SourcePosition
 	/// `nil` when the type is not written (`var retries = 3`). For a defaulted optional, the wrapped type's key.
 	var key: Result<KeyNormalization.Normalized, UnsupportedKey>?
+	/// `[any P]`: an empty collection is a valid injection.
+	var elementSpelledWithAny: Bool
 	var typeSpelling: String
 	/// `KeyNormalization.canonicalSpelling` of the type, to match assisted arguments against factory parameters.
 	var canonicalType: String
@@ -237,7 +242,8 @@ struct DeclarationScanner {
 			let name = extensionDecl.extendedType.trimmedDescription
 			result.extensions.append(ExtensionDecl(
 				extendedName: name,
-				initializers: initializers(in: extensionDecl.memberBlock.members)
+				initializers: initializers(in: extensionDecl.memberBlock.members),
+				inheritedTypes: inheritedTypes(extensionDecl.inheritanceClause)
 			))
 			recordInitializerBodies(extensionDecl.memberBlock.members, typeName: name)
 			let isPublic = extensionDecl.modifiers.contains { isPublicModifier($0) }
@@ -294,7 +300,8 @@ struct DeclarationScanner {
 			initializers: initializers(in: members),
 			memberwise: memberwise,
 			hasWrappedProperty: hasWrappedProperty,
-			location: location
+			location: location,
+			inheritedTypes: inheritedTypes(group.inheritanceClause)
 		))
 		recordMarkerProperties(members)
 		recordInitializerBodies(members, typeName: name)
@@ -443,7 +450,8 @@ struct DeclarationScanner {
 				hasDefault: hasDefault,
 				location: position(parameter),
 				typeLocation: position(parameter.type),
-				key: key(for: parameter.type, hasDefault: hasDefault),
+				key: KeyNormalization.key(for: keyType(parameter.type, hasDefault: hasDefault)),
+				elementSpelledWithAny: KeyNormalization.elementSpelledWithAny(keyType(parameter.type, hasDefault: hasDefault)),
 				typeSpelling: parameter.type.trimmedDescription,
 				canonicalType: KeyNormalization.canonicalSpelling(of: parameter.type),
 				factory: FactoryNormalization.factory(for: parameter.type),
@@ -492,7 +500,8 @@ struct DeclarationScanner {
 					hasDefault: hasDefault,
 					location: position(binding),
 					typeLocation: type.map { position($0) } ?? position(binding),
-					key: type.map { key(for: $0, hasDefault: hasDefault) },
+					key: type.map { KeyNormalization.key(for: keyType($0, hasDefault: hasDefault)) },
+					elementSpelledWithAny: type.map { KeyNormalization.elementSpelledWithAny(keyType($0, hasDefault: hasDefault)) } ?? false,
 					typeSpelling: type?.trimmedDescription ?? "",
 					canonicalType: type.map { KeyNormalization.canonicalSpelling(of: $0) } ?? "",
 					factory: type.flatMap { FactoryNormalization.factory(for: $0) },
@@ -517,11 +526,16 @@ struct DeclarationScanner {
 	}
 
 	/// A defaulted `T?` parameter is looked up as `T`.
-	private func key(for type: TypeSyntax, hasDefault: Bool) -> Result<KeyNormalization.Normalized, UnsupportedKey> {
+	private func keyType(_ type: TypeSyntax, hasDefault: Bool) -> TypeSyntax {
 		if hasDefault, let wrapped = KeyNormalization.optionalWrapped(type) {
-			return KeyNormalization.key(for: wrapped)
+			return wrapped
 		}
-		return KeyNormalization.key(for: type)
+		return type
+	}
+
+	/// Entries that are not valid keys (e.g. compositions) can never match a collection element, so they are dropped.
+	private func inheritedTypes(_ clause: InheritanceClauseSyntax?) -> [TypeKey] {
+		clause?.inheritedTypes.compactMap { try? KeyNormalization.key(for: $0.type).get().key } ?? []
 	}
 
 	/// No accessor block, or only `willSet` / `didSet` observers.

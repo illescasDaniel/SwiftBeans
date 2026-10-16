@@ -115,4 +115,9 @@ struct SwiftBeansGeneratorMain {
 		printError("error: \(message)")
 		exit(1)
 	}
+
+	/// `FileHandle` instead of `fputs(_:stderr)`: Glibc's `stderr` is a mutable global that Swift 6 rejects.
+	private static func printError(_ line: String) {
+		FileHandle.standardError.write(Data("\(line)\n".utf8))
+	}
 }

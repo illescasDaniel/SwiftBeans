@@ -35,6 +35,13 @@
 **Decision:** Function types are accepted only as dependency parameters. `(P…) -> R` binds to `R`'s assisted method when the assisted parameter types equal `P…` positionally (canonical spelling; labels ignored), and `() -> R` binds to `R`'s plain accessor. Both emit closure literals (`{ self.t }`, `{ self.t($0, label: $1) }`) and add no cycle edge. Mismatches are `factory.unresolved`; unknown `R` stays `graph.missingDependency`. Closures capture the context strongly. Spec: `specs/factory-injection/SPEC.md`.
 
 **Rationale:** Factories are invoked after construction, so they cannot create a construction cycle. Swift erases function-type labels, so positional matching is the only sound rule. A weak capture would force optional handling in generated code; transient holders (the example coordinator) avoid the retain cycle.
+## 2026-10-15 — Collection injection: members by key or declared conformance
+
+**Context:** `[any P]` should receive every `P` bean, but keys are unique (two providers for `P` are `graph.duplicateProvider` and would share an accessor), so key equality alone yields at most one member.
+
+**Decision:** A `[E]` parameter with no `[E]` provider multi-binds `[self.a, self.b]`: members are non-assisted providers whose key is `E` or whose key names a scanned type declaring `E` in an inheritance clause (own declaration or extension, transitively through superclasses / sub-protocols), excluding the consumer, sorted by accessor name. An explicit `[E]` bean wins. `[any E]` with no members gets `[]`; plain `[E]` (e.g. `[String]`) stays a missing dependency. A `boundTo: Q` service is a member only via `Q`'s own conformances, never via its concrete type's (its accessor is typed `any Q`). One `ParameterInjection` value is shared by validator and codegen so both agree.
+
+**Rationale:** Spring-like assignability without touching the duplicate rule, accessors, `{Context}Protocol` or qualifiers; graphs that built before keep byte-identical output, except a defaulted `[E]` parameter that now receives existing members.
 
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 

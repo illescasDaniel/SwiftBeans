@@ -19,6 +19,8 @@ struct BeanProvider {
 	var displayName: String
 	var construction: Construction
 	var parameters: [BeanParameter]
+	/// Keys the type named by `key` declares in scanned inheritance clauses, transitively; it can join `[K]` for each.
+	var conformances: Set<TypeKey>
 
 	/// True when any parameter is `@Assisted`: the accessor is a method, not a property.
 	var isAssisted: Bool {
@@ -32,6 +34,8 @@ struct BeanParameter {
 	/// `nil` when the parameter can only take its default (unsupported or unwritten type), and always for an assisted one.
 	var key: BeanKey?
 	var spelledWithAny: Bool
+	/// `[any P]`: with no array bean and no members, the parameter gets `[]`.
+	var elementSpelledWithAny: Bool
 	var hasDefault: Bool
 	var location: SourcePosition
 	/// Non-nil for an `@Assisted` parameter.
@@ -60,6 +64,8 @@ struct ProviderResolver {
 	private let types: [String: TypeDecl]
 	private let configurationNames: Set<String>
 	private let extensionInitializers: [String: [InitializerInfo]]
+	/// Inheritance clauses of every scanned type and extension, by qualified type name.
+	private let inheritedTypes: [String: [TypeKey]]
 
 	static func resolve(_ files: [ScannedFile]) -> (providers: [BeanProvider], diagnostics: [GeneratorDiagnostic]) {
 		var resolver = ProviderResolver(files)
@@ -86,16 +92,22 @@ struct ProviderResolver {
 	private init(_ files: [ScannedFile]) {
 		var types: [String: TypeDecl] = [:]
 		var extensionInitializers: [String: [InitializerInfo]] = [:]
+		var inheritedTypes: [String: [TypeKey]] = [:]
 		for file in files {
-			for type in file.types where types[type.name] == nil {
-				types[type.name] = type
+			for type in file.types {
+				if types[type.name] == nil {
+					types[type.name] = type
+				}
+				inheritedTypes[type.name, default: []] += type.inheritedTypes
 			}
 			for extensionDecl in file.extensions {
 				extensionInitializers[extensionDecl.extendedName, default: []] += extensionDecl.initializers
+				inheritedTypes[extensionDecl.extendedName, default: []] += extensionDecl.inheritedTypes
 			}
 		}
 		self.types = types
 		self.extensionInitializers = extensionInitializers
+		self.inheritedTypes = inheritedTypes
 		configurationNames = Set(files.flatMap(\.types).filter(\.isConfiguration).map(\.name))
 	}
 
@@ -163,7 +175,8 @@ struct ProviderResolver {
 			location: service.location,
 			displayName: type.name,
 			construction: .initializer(typeName: type.name),
-			parameters: resolved
+			parameters: resolved,
+			conformances: conformances(of: normalized.key)
 		))
 	}
 
@@ -225,11 +238,26 @@ struct ProviderResolver {
 			location: bean.location,
 			displayName: displayName,
 			construction: .staticMethod(typeName: bean.enclosingName, name: bean.name),
-			parameters: resolved
+			parameters: resolved,
+			conformances: conformances(of: normalized.key)
 		))
 	}
 
 	// MARK: - Helpers
+
+	/// Walks inheritance clauses from the declaration named by `key` (`Sub: Base`, `Base: P` → `Base`, `P`).
+	/// Matching is by spelling, like keys; types declared outside the scan set contribute nothing.
+	private func conformances(of key: TypeKey) -> Set<TypeKey> {
+		var found = Set<TypeKey>()
+		var pending = [key]
+		while let next = pending.popLast() {
+			guard case .nominal = next else { continue }
+			for inherited in inheritedTypes[next.description] ?? [] where inherited != key && found.insert(inherited).inserted {
+				pending.append(inherited)
+			}
+		}
+		return found
+	}
 
 	/// An assisted provider constructs a new instance per call, so it is always transient;
 	/// an explicit `.singleton` is an error at the `scope:` argument.
@@ -284,6 +312,7 @@ struct ProviderResolver {
 					label: parameter.label,
 					key: nil,
 					spelledWithAny: false,
+					elementSpelledWithAny: false,
 					hasDefault: parameter.hasDefault,
 					location: parameter.location,
 					assisted: AssistedArgument(
@@ -330,6 +359,7 @@ struct ProviderResolver {
 				label: parameter.label,
 				key: key,
 				spelledWithAny: spelledWithAny,
+				elementSpelledWithAny: parameter.elementSpelledWithAny,
 				hasDefault: parameter.hasDefault,
 				location: parameter.location,
 				assisted: nil,
