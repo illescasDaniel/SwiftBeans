@@ -100,7 +100,7 @@ Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 �
 - [x] Local-package scan refresh: generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs
 - [x] Inter-bean call diagnostic (`specs/inter-bean-call-diagnostic/SPEC.md`): warning `bean.directCall`
 - [x] Child contexts Phase 1: `specs/child-contexts/SPEC.md` drafted (+ proposed `ARCHITECTURE.md` stub); awaiting approval
-- [ ] **Next: integration test of `feature/improvements`** — run full `swift test` (+ example app when practical) on the merged stack; fix any cross-feature regressions
+- [x] Integration merge on `feature/improvements` + `swift test` green (201 tests / 19 suites, 2026-10-16). Example app combined check still optional.
 - [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
 - [ ] Example app: adopt collection injection / factories / qualifiers as generated-code compile checks on macOS/iOS
 - [ ] Child contexts: approval, Phase 2 contracts, tests, implementation (Phases 0 / A / B–D per the spec; see open questions first)

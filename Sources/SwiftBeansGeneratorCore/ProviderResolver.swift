@@ -291,9 +291,11 @@ struct ProviderResolver {
 							label: parameter.label,
 							key: nil,
 							spelledWithAny: false,
+							elementSpelledWithAny: false,
 							hasDefault: parameter.hasDefault,
 							location: parameter.location,
-							assisted: nil
+							assisted: nil,
+							factory: nil
 						)
 					}
 				}
@@ -338,6 +340,7 @@ struct ProviderResolver {
 					label: parameter.label,
 					key: nil,
 					spelledWithAny: false,
+					elementSpelledWithAny: false,
 					hasDefault: parameter.hasDefault,
 					location: parameter.location,
 					assisted: nil,

@@ -139,11 +139,11 @@ enum GraphValidator {
 				if parameter.factory != nil { return [] }
 				switch injection.injection(for: parameter, of: index) {
 				case .key(let key):
-					byKey[key].flatMap { providers[$0[0]].isAssisted ? nil : [$0[0]] } ?? []
+					return byKey[key].flatMap { providers[$0[0]].isAssisted ? nil : [$0[0]] } ?? []
 				case .collection(let members):
-					members
+					return members
 				case nil:
-					[]
+					return []
 				}
 			}
 		}

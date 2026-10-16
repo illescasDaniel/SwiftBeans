@@ -4,19 +4,21 @@ _Last updated: 2026-10-16_
 
 ## Branch
 
-- `feature/improvements` (local only — not pushed)
+- `feature/improvements` (local only — not pushed; individual draft PRs #1–#7 left open)
 
 ## Current focus
 
-All seven open draft PRs are merged into this branch (order: #3 → #4 → #2 → #7 → #6 → #5 → #1). Cross-feature seams composed for `BeanKey` (factories resolve unqualified; collections include named members by type). Next task is to **test everything together** and fix any integration failures.
+Stack of all seven draft PRs is merged and **`swift test` is green (201 tests / 19 suites)**. Cross-feature seams for `BeanKey` fixed during integration. Ready for deeper combined validation (example app) when asked.
 
 ## Just changed
 
-- Merged `cursor/local-package-scan-refresh-53df`, `inter-bean-call-diagnostic`, `graph-dump`, `qualifiers`, `factory-injection`, `collection-injection`, `child-contexts-spec`
-- Integration fixes while merging: plugin `--request` + graph dump paths; `ParameterInjection` / `GraphValidator` / `CodeGenerator` on `BeanKey`
+- Merged in order: #3 → #4 → #2 → #7 → #6 → #5 → #1
+- Integration compile fixes: `GraphDump` / `GraphValidator` / `ProviderResolver` for stacked `BeanKey` + factories + collections
+- Plugin: `--request` + `--graph-markdown` / `--graph-dot`
 
 ## Next steps
 
-1. Run `swift test` on `feature/improvements` (and example app tests if time allows)
-2. Fix any failures from stacking the features
-3. Keep this branch local until asked to push; do not merge to `main`; leave the seven PRs open
+1. Optional: run example app macOS tests / iOS Simulator build on this branch
+2. Push `feature/improvements` only when asked
+3. Do not merge to `main`; do not close the seven PRs
+4. Remaining backlog: child-contexts Phase 2+, example adoption of new features, nested-`any` array accessor gap

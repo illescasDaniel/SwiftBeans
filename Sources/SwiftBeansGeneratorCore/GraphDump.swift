@@ -77,7 +77,7 @@ enum GraphDump {
 		let provided = Set(sorted.map(\.key))
 		return sorted.map { provider in
 			let dependencies = Set(
-				provider.parameters.compactMap { parameter -> TypeKey? in
+				provider.parameters.compactMap { parameter -> BeanKey? in
 					guard parameter.assisted == nil, let key = parameter.key, provided.contains(key) else { return nil }
 					return key
 				}
