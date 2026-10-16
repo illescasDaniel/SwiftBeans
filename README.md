@@ -64,6 +64,8 @@ targets: [
 
 The plugin writes `SwiftBeansGenerated.swift` into the build folder. You never edit or commit it.
 
+Next to it the plugin writes `SwiftBeansGraph.md` (providers and dependencies as tables) and `SwiftBeansGraph.dot` (Graphviz: `dot -Tsvg SwiftBeansGraph.dot -o graph.svg`), a quick way to see what is wired to what. With SwiftPM they are under `.build/plugins/outputs/<package>/<target>/destination/SwiftBeansPlugin/`; with Xcode, in the target's plugin work folder inside DerivedData (search for `SwiftBeansGraph.md`). They are only written when generation succeeds.
+
 ## Concepts
 
 | Annotation | On | Meaning |

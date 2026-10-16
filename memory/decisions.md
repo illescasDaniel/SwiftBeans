@@ -14,6 +14,13 @@
 **Decision:** Add a generator-only warning `bean.directCall` (`DirectCallAnalyzer`, after scan/resolve) for calls to a known `@Bean` from `@Bean` bodies and `@Service` initializer bodies (`Type.bean()`, `Self.bean()`, bare `bean()`), with a note at the callee. Matches by base name and type spelling; ambiguous or self calls are skipped. Severity is a warning. Proxies, instance `@Bean`, and macro rewriting stay out of scope (options recorded in the SPEC).
 
 **Rationale:** Cheapest useful step with no change to generated output or public API. A warning avoids breaking builds on false positives of a spelling-based match (typealiases, local shadowing) until there is data to justify an error.
+## 2026-10-15 — Graph dump files are written by the generator but not declared as plugin outputs
+
+**Context:** Graph dump adds `SwiftBeansGraph.md` / `SwiftBeansGraph.dot` next to `SwiftBeansGenerated.swift`. Declaring them in the build command's `outputFiles` made SwiftPM copy them into a `<Package>_<Target>.bundle` (unknown output types become resources), giving every consumer target a resource bundle.
+
+**Decision:** The plugin passes `--graph-markdown` / `--graph-dot` paths to the generator but lists only `SwiftBeansGenerated.swift` in `outputFiles`. v1 always emits on success; no `.swiftbeans.yml` toggle yet.
+
+**Rationale:** A resource bundle in app targets is a worse side effect than the build system not tracking a debug artifact. Trade-off: deleting a graph file by hand does not rerun the generator until an input changes. Content is generated in `SwiftBeansGeneratorCore` (`GraphDump`) so it is unit-tested from fixture sources.
 
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 

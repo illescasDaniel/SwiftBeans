@@ -2,19 +2,20 @@ import Foundation
 import SwiftBeansGeneratorCore
 
 /// ```
-/// SwiftBeansGenerator --output <file> --request <generator-request.json>
-/// SwiftBeansGenerator --output <file> --input <generator-input.json>
-/// SwiftBeansGenerator --output <file> <source.swift>...   # debugging: all files are target sources
+/// SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --request <generator-request.json>
+/// SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --input <generator-input.json>
+/// SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] <source.swift>...   # debugging: all files are target sources
 /// ```
 ///
 /// `--request` is what `SwiftBeansPlugin` uses: the generator re-reads `.swiftbeans.yml` and re-walks the
 /// local packages on every run. `--input` and plain source paths parse exactly the files given.
+/// `--graph-markdown` / `--graph-dot` write the resolved-graph dumps on success only.
 @main
 struct SwiftBeansGeneratorMain {
 	static let usage = """
-		usage: SwiftBeansGenerator --output <file> --request <generator-request.json>
-		       SwiftBeansGenerator --output <file> --input <generator-input.json>
-		       SwiftBeansGenerator --output <file> <source.swift>...
+		usage: SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --request <generator-request.json>
+		       SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --input <generator-input.json>
+		       SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] <source.swift>...
 		"""
 
 	static func main() {
@@ -22,13 +23,15 @@ struct SwiftBeansGeneratorMain {
 		var outputPath: String?
 		var inputPath: String?
 		var requestPath: String?
+		var graphMarkdownPath: String?
+		var graphDotPath: String?
 		var sourcePaths: [String] = []
 
 		var index = 0
 		while index < arguments.count {
 			let argument = arguments[index]
 			switch argument {
-			case "--output", "--input", "--request":
+			case "--output", "--input", "--request", "--graph-markdown", "--graph-dot":
 				index += 1
 				guard index < arguments.count else {
 					fail("\(argument) requires a path")
@@ -36,7 +39,9 @@ struct SwiftBeansGeneratorMain {
 				switch argument {
 				case "--output": outputPath = arguments[index]
 				case "--input": inputPath = arguments[index]
-				default: requestPath = arguments[index]
+				case "--request": requestPath = arguments[index]
+				case "--graph-markdown": graphMarkdownPath = arguments[index]
+				default: graphDotPath = arguments[index]
 				}
 			case "--help", "-h":
 				print(usage)
@@ -85,12 +90,19 @@ struct SwiftBeansGeneratorMain {
 		guard let output = result.output else {
 			exit(1)
 		}
-		do {
-			let outputURL = URL(filePath: outputPath)
-			try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-			try GeneratedFileWriter.write(output, to: outputURL)
-		} catch {
-			fail("cannot write \(outputPath): \(error)")
+		let files: [(path: String?, contents: String?)] = [
+			(outputPath, output),
+			(graphMarkdownPath, result.graphMarkdown),
+			(graphDotPath, result.graphDot),
+		]
+		for case (let path?, let contents?) in files {
+			do {
+				let url = URL(filePath: path)
+				try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+				try GeneratedFileWriter.write(contents, to: url)
+			} catch {
+				fail("cannot write \(path): \(error)")
+			}
 		}
 	}
 
@@ -102,9 +114,5 @@ struct SwiftBeansGeneratorMain {
 	private static func fail(_ message: String) -> Never {
 		printError("error: \(message)")
 		exit(1)
-	}
-
-	private static func printError(_ message: String) {
-		FileHandle.standardError.write(Data((message + "\n").utf8))
 	}
 }

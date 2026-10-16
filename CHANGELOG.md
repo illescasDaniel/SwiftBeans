@@ -8,13 +8,11 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
 - Build warning `bean.directCall` when a `@Bean` body or `@Service` initializer calls another `@Bean` directly instead of taking it as a parameter (see `specs/inter-bean-call-diagnostic/SPEC.md`).
+- Graph dump: after a successful generation the plugin writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot` (Graphviz) next to `SwiftBeansGenerated.swift`. The generator CLI gains `--graph-markdown` / `--graph-dot`.
 
 ### Fixed
 
 - Generator executable builds on Linux in Swift 6 mode (no direct `stderr` reference).
-
-### Fixed
-
 - A new `.swift` file in a `.swiftbeans.yml` local package (or a `.swiftbeans.yml` created later) joins the graph without a clean build: the generator re-reads the config and re-walks the packages on every run.
 
 ## [0.1.0] - 2026-10-15

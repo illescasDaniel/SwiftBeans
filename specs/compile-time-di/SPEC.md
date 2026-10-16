@@ -287,6 +287,7 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 
 1. The generator writes the output file only when its contents change, so unchanged wiring does not trigger downstream recompiles.
 2. Output is a pure function of the scanned sources: declarations, imports and diagnostics are in a stable order.
+3. After a successful generation the generator also writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot` (the resolved bean graph) next to it. See `specs/graph-dump/SPEC.md`.
 
 ### Singleton storage (runtime)
 

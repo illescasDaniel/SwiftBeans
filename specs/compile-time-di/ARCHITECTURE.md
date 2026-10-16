@@ -548,12 +548,13 @@ No folder walking of the target, no source-root inference, no file-name markers.
 ### Generator CLI
 
 ```
-SwiftBeansGenerator --output <file> --request <generator-request.json>   # plugin
-SwiftBeansGenerator --output <file> --input <generator-input.json>        # explicit file lists
-SwiftBeansGenerator --output <file> <source.swift>...      # debugging: all files are target sources
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --request <generator-request.json>   # plugin
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --input <generator-input.json>        # explicit file lists
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] <source.swift>...      # debugging: all files are target sources
 ```
 
-- The plugin writes `GeneratorRequest` as JSON (`scanRoot`, `targetSources`, `configFileName`) to `<pluginWorkDirectory>/SwiftBeansRequest.json` (only when its bytes change) and passes `--request`. One JSON file replaces one argument per source, which could exceed the OS argument-length limit on large apps.
+- `--graph-markdown` / `--graph-dot` write the resolved-graph dumps (`GraphDump` in `SwiftBeansGeneratorCore`; `specs/graph-dump/SPEC.md`). They are written only on success, with the same write-if-changed rule as `--output`.
+- The plugin writes `GeneratorRequest` as JSON (`scanRoot`, `targetSources`, `configFileName`) to `<pluginWorkDirectory>/SwiftBeansRequest.json` (only when its bytes change) and passes `--request` plus the graph paths. One JSON file replaces one argument per source, which could exceed the OS argument-length limit on large apps.
 - `SwiftBeansGeneration.generate(request:)` (GeneratorCore, unit-tested) reads `<scanRoot>/<configFileName>` if it exists, resolves local packages with `ScanSetResolver`, builds a `GeneratorInput` from the *current* disk state, and calls `generate(input:)`. A config error becomes an error diagnostic (`config.invalid`) at the config file and line; nothing is generated.
 - `GeneratorRequest` and `GeneratorInput` are declared in the shared `ScanSetResolution.swift` (public, Foundation-only), so the plugin's encoder and the generator's decoder are the same code, kept identical by the drift guard. `SwiftBeansGeneratorCore` re-exposes them from there.
 - The generator creates the output file's folder if needed and writes through `GeneratedFileWriter`, which leaves identical bytes untouched, so an unchanged graph keeps Swift compilation incremental.
@@ -609,7 +610,7 @@ Config problems are reported by the generator, not the plugin: it prints `<confi
 
 ### Plugin shape
 
-`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that writes `SwiftBeansRequest.json` and returns the single `.buildCommand` (`--output`, `--request`; inputs = target sources ∪ request JSON ∪ scan root ∪ config ∪ package files ∪ package folders).
+`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that writes `SwiftBeansRequest.json` and returns the single `.buildCommand` (`--output`, `--graph-markdown`, `--graph-dot`, `--request`; inputs = target sources ∪ request JSON ∪ scan root ∪ config ∪ package files ∪ package folders; declared output = `SwiftBeansGenerated.swift` only, the graph files are written beside it undeclared so SwiftPM does not bundle them as resources).
 
 **Why not a prebuild command.** A prebuild command runs every build and is the natural fit for "re-resolve each time", but SwiftPM rejects it for executables built from source (`a prebuild command cannot use executables built from source, including executable target 'SwiftBeansGenerator'`, verified with Swift 6.5-dev, both build systems); only binary targets or system tools are allowed. A binary-target generator would need a prebuilt artifact bundle per release. So the generator remains a build command, but all scan decisions moved into it, and folders are declared as inputs so the build system reruns it when files are added or removed.
 

@@ -24,6 +24,8 @@ struct SwiftBeansPlugin: BuildToolPlugin {
 
 	static let outputFileName = "SwiftBeansGenerated.swift"
 	static let requestFileName = "SwiftBeansRequest.json"
+	static let graphMarkdownFileName = "SwiftBeansGraph.md"
+	static let graphDotFileName = "SwiftBeansGraph.dot"
 
 	static func makeCommands(
 		targetName: String,
@@ -38,12 +40,21 @@ struct SwiftBeansPlugin: BuildToolPlugin {
 		try writeIfChanged(request, to: requestURL)
 
 		let output = workDirectory.appending(path: outputFileName)
+		let graphMarkdown = workDirectory.appending(path: graphMarkdownFileName)
+		let graphDot = workDirectory.appending(path: graphDotFileName)
 		return [
 			.buildCommand(
 				displayName: "SwiftBeans: generate \(targetName)",
 				executable: generator,
-				arguments: ["--output", output.path, "--request", requestURL.path],
+				arguments: [
+					"--output", output.path,
+					"--graph-markdown", graphMarkdown.path,
+					"--graph-dot", graphDot.path,
+					"--request", requestURL.path,
+				],
 				inputFiles: targetSources + [requestURL] + watchedPaths(request: request),
+				// The graph files are deliberately not declared: SwiftPM treats every declared output it
+				// cannot compile as a resource and would add a resource bundle to the target.
 				outputFiles: [output]
 			),
 		]
