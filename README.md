@@ -29,6 +29,7 @@ Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Ca
 - [Binding to protocols](#binding-to-protocols)
 - [Choosing an initializer: `@Inject`](#choosing-an-initializer-inject)
 - [Runtime arguments: `@Assisted`](#runtime-arguments-assisted)
+- [Factories: `(Item) -> T` and `() -> T`](#factories-item---t-and----t)
 - [Testing and Previews: `{Context}Protocol`](#testing-and-previews-contextprotocol)
 - [Beans from local packages: `.swiftbeans.yml`](#beans-from-local-packages-swiftbeansyml)
 - [Rules worth knowing](#rules-worth-knowing)
@@ -199,7 +200,7 @@ let viewModel = context.itemDetailViewModel(item: selectedItem)
 - `@Assisted` is a marker property wrapper: callers pass a plain `Item` and the initializer body sees a plain `Item`.
 - Labels and order are kept (`@Assisted _ id: Int` → `itemDetailViewModel(_ id: Int)`).
 - An assisted provider is always transient. An explicit `scope: .singleton` is a build error.
-- Other beans cannot inject an assisted type (the graph has no runtime arguments to give); the error names the method to call. Injecting factories such as `(Item) -> ItemDetailViewModel` is planned.
+- Other beans cannot inject an assisted type (the graph has no runtime arguments to give); the error names the method to call, or inject a [factory](#factories-item---t-and----t) instead.
 - Default values, `inout` and variadic `@Assisted` parameters are not supported yet.
 
 ## Qualifiers: several beans of one type
@@ -229,6 +230,30 @@ final class ItemParser {
 ```
 
 The key is `(type, name)`, so `snakeCase` on `JSONDecoder` and on `JSONEncoder` are unrelated. An unqualified parameter never silently picks a named bean. See [`specs/qualifiers/SPEC.md`](specs/qualifiers/SPEC.md).
+
+## Factories: `(Item) -> T` and `() -> T`
+
+A bean can take a function instead of a value, so it can create objects later or repeatedly without holding the context.
+
+```swift
+@Service(scope: .transient)
+final class Coordinator {
+	init(
+		makeDetail: @escaping (Item) -> ItemDetailViewModel, // assisted provider
+		makeList: @escaping () -> ItemListViewModel          // any other provider
+	) { … }
+}
+
+// Generated
+Coordinator(makeDetail: { self.itemDetailViewModel(item: $0) }, makeList: { self.itemListViewModel })
+```
+
+- `(A, B) -> T` is wired to `T`'s assisted method when `T`'s `@Assisted` parameter types are `A, B` in order. Labels on the function type are ignored (Swift erases them); a mismatch is a `factory.unresolved` error naming the expected signature.
+- `() -> T` re-reads `T`'s accessor on each call: a singleton returns the same instance, a transient a new one.
+- Factories are lazy, so they **break cycles**: `A` taking `() -> B` while `B` takes `A` is fine.
+- Function types work only as dependency parameters, not as bean return types or `boundTo:` keys.
+- The closure captures the context strongly: keep factories in transient beans (a coordinator), not singletons, if the context must be freed.
+- Factories resolve against the **unqualified** provider of the return type (see qualifiers above).
 
 ## Testing and Previews: `{Context}Protocol`
 
@@ -298,7 +323,7 @@ local_packages:
 - Every annotated declaration is wired or reported; nothing is skipped silently. All errors from one build are reported together, in a stable order.
 - `@Bean` methods are `static`, have a return type, no generics, and may not `throw` or be `async`; the same goes for selected initializers.
 - Annotated declarations inside `#if` blocks are a build error (the generator can't know which branch compiles). `#if` inside a function body is fine.
-- Unsupported key types: optionals, tuples, functions, `some P`, metatypes, `any A & B`, generic parameters. Wrap them in a named type or provide a protocol.
+- Unsupported key types: optionals, tuples, functions (except as factory parameters), `some P`, metatypes, `any A & B`, generic parameters. Wrap them in a named type or provide a protocol.
 - Keys match by spelling after normalization: `[String: Int]` ≡ `Dictionary<String, Int>`, `any P` ≡ `P`, but a typealias and its underlying type are different keys.
 - Generic `@Service` types, property injection and subcontexts are not supported in v1.
 

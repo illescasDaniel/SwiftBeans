@@ -93,6 +93,10 @@ struct ParameterInfo {
 	/// `nil` when the type is not written (`var retries = 3`). For a defaulted optional, the wrapped type's key.
 	var key: Result<KeyNormalization.Normalized, UnsupportedKey>?
 	var typeSpelling: String
+	/// `KeyNormalization.canonicalSpelling` of the type, to match assisted arguments against factory parameters.
+	var canonicalType: String
+	/// Non-nil when the type is a function type (a factory request).
+	var factory: Result<FactoryType, UnsupportedFactory>?
 	/// `@Assisted` / `@SwiftBeans.Assisted`.
 	var isAssisted: Bool
 	/// `@Qualifier(…)` / `@SwiftBeans.Qualifier(…)`.
@@ -441,6 +445,8 @@ struct DeclarationScanner {
 				typeLocation: position(parameter.type),
 				key: key(for: parameter.type, hasDefault: hasDefault),
 				typeSpelling: parameter.type.trimmedDescription,
+				canonicalType: KeyNormalization.canonicalSpelling(of: parameter.type),
+				factory: FactoryNormalization.factory(for: parameter.type),
 				isAssisted: SwiftBeansSyntaxRules.isAssisted(parameter),
 				qualifier: SwiftBeansSyntaxRules.qualifierAttribute(in: parameter.attributes).map(qualifierUse),
 				isVariadic: parameter.ellipsis != nil,
@@ -488,6 +494,8 @@ struct DeclarationScanner {
 					typeLocation: type.map { position($0) } ?? position(binding),
 					key: type.map { key(for: $0, hasDefault: hasDefault) },
 					typeSpelling: type?.trimmedDescription ?? "",
+					canonicalType: type.map { KeyNormalization.canonicalSpelling(of: $0) } ?? "",
+					factory: type.flatMap { FactoryNormalization.factory(for: $0) },
 					isAssisted: false,
 					qualifier: nil,
 					isVariadic: false,

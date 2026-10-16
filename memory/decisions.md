@@ -28,6 +28,13 @@
 **Decision:** Introduce `BeanKey` = `(TypeKey, qualifier: String?)`. `named:` on `@Bean`/`@Service` and `@Qualifier("…")` on parameters (property-wrapper marker like `@Assisted`). Accessor = qualifier + type pieces (`snakeCaseJSONDecoder`). Unqualified params never pick a sole named candidate. Name literals must be identifier-shaped. Graphs with no qualifiers stay byte-identical.
 
 **Rationale:** Matches the 2026-10-15 backlog notes; keeps diagnostics and `{Context}Protocol` per-key; avoids global name registries and suffix churn.
+## 2026-10-15 — Factory injection: lazy edges, positional type matching, strong context capture
+
+**Context:** Beans (e.g. a coordinator) had to hold the whole context to create assisted view models or defer expensive beans.
+
+**Decision:** Function types are accepted only as dependency parameters. `(P…) -> R` binds to `R`'s assisted method when the assisted parameter types equal `P…` positionally (canonical spelling; labels ignored), and `() -> R` binds to `R`'s plain accessor. Both emit closure literals (`{ self.t }`, `{ self.t($0, label: $1) }`) and add no cycle edge. Mismatches are `factory.unresolved`; unknown `R` stays `graph.missingDependency`. Closures capture the context strongly. Spec: `specs/factory-injection/SPEC.md`.
+
+**Rationale:** Factories are invoked after construction, so they cannot create a construction cycle. Swift erases function-type labels, so positional matching is the only sound rule. A weak capture would force optional handling in generated code; transient holders (the example coordinator) avoid the retain cycle.
 
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 

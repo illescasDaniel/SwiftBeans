@@ -1,4 +1,4 @@
-/// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, assisted keys, cycles.
+/// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, factories, assisted keys, cycles.
 ///
 /// Keys are `(type, qualifier)`. Every check iterates providers sorted by `(key, location)`, never dictionary order.
 enum GraphValidator {
@@ -45,6 +45,19 @@ enum GraphValidator {
 			}
 		}
 
+		func didYouMean(_ type: TypeKey) -> [GeneratorDiagnostic] {
+			providers
+				.filter { $0.key.type.lastComponentName != nil && $0.key.type.lastComponentName == type.lastComponentName }
+				.map {
+					GeneratorDiagnostic(
+						severity: .note,
+						id: "graph.didYouMean",
+						location: $0.location,
+						message: "did you mean \($0.key.quoted) (provided by '\($0.displayName)')?"
+					)
+				}
+		}
+
 		// 3. Missing dependencies.
 		for provider in providers {
 			for parameter in provider.parameters {
@@ -67,22 +80,40 @@ enum GraphValidator {
 					))
 					continue
 				}
-				let notes = providers
-					.filter { $0.key.type.lastComponentName != nil && $0.key.type.lastComponentName == key.type.lastComponentName }
-					.map {
-						GeneratorDiagnostic(
-							severity: .note,
-							id: "graph.didYouMean",
-							location: $0.location,
-							message: "did you mean \($0.key.quoted) (provided by '\($0.displayName)')?"
-						)
-					}
 				diagnostics.append(GeneratorDiagnostic(
 					id: "graph.missingDependency",
 					location: parameter.location,
 					message: "missing dependency \(key.quoted) required by '\(provider.displayName)'",
-					notes: notes
+					notes: didYouMean(key.type)
 				))
+			}
+		}
+
+		// 3b. Factory parameters: the return type matches the unqualified provider of that type.
+		let firstByType = { (type: TypeKey) in byKey[BeanKey(type)]?.first.map { providers[$0] } }
+		for provider in providers {
+			for parameter in provider.parameters {
+				guard let factory = parameter.factory, !parameter.hasDefault else { continue }
+				switch FactoryBinding.resolve(factory, providersByKey: firstByType) {
+				case .deferred, .assisted:
+					break
+				case .missing:
+					diagnostics.append(GeneratorDiagnostic(
+						id: "graph.missingDependency",
+						location: parameter.location,
+						message: "missing dependency '\(factory.returnKey)' required by '\(provider.displayName)' (factory '\(factory.description)')",
+						notes: didYouMean(factory.returnKey)
+					))
+				case .mismatch(let target, let expected):
+					let reason = target.isAssisted
+						? "'\(target.displayName)' takes runtime arguments; inject it as '\(expected)'"
+						: "'\(factory.returnKey)' takes no runtime arguments; inject it as '() -> \(factory.returnKey)'"
+					diagnostics.append(GeneratorDiagnostic(
+						id: "factory.unresolved",
+						location: parameter.location,
+						message: "factory '\(factory.description)' required by '\(provider.displayName)' does not match: \(reason)"
+					))
+				}
 			}
 		}
 
@@ -101,7 +132,7 @@ enum GraphValidator {
 			}
 		}
 
-		// 5. Cycles over injected edges (an assisted provider is never a dependency).
+		// 5. Cycles over injected edges (an assisted provider is never a dependency; factories are lazy and add no edge).
 		let edges = providers.map { provider in
 			provider.parameters.compactMap { parameter in
 				parameter.key.flatMap { byKey[$0]?.first }.flatMap { providers[$0].isAssisted ? nil : $0 }

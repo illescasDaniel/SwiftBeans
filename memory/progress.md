@@ -84,7 +84,7 @@
 
 ### Open
 
-- [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
+- [x] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel` — done on `cursor/factory-injection-53df` (2026-10-15)
 
 - [x] Published as public repo `illescasDaniel/SwiftBeans`, MIT license, tag + release `0.1.0` (2026-10-15)
 
@@ -93,7 +93,7 @@
 Suggested order: CI first, then factory injection, then qualifiers.
 
 - [x] CI: GitHub Action (`.github/workflows/ci.yml`, `xcode-27` runner, Xcode 27.0) running `swift test` + example macOS tests and iOS Simulator build; README badge; `CHANGELOG.md` (2026-10-15). Releases stay semver `0.x` while the API may break
-- [ ] Factory injection (same item as the backlog above): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
+- [x] Factory injection (same item as the backlog above; `specs/factory-injection/SPEC.md`, 2026-10-15): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles). Factories resolve against the unqualified provider of the return type.
 - [x] Qualifiers: `@Bean(named:)` / `@Service(named:)` + `@Qualifier("…")` — `specs/qualifiers/SPEC.md`, `BeanKey`, generator + tests (2026-10-15). Optional later: `accessor:` override; example-app demo
 - [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
 - [x] Graph dump: generator/plugin emit `SwiftBeansGraph.md` + `SwiftBeansGraph.dot` on success (`specs/graph-dump/SPEC.md`). Future: `.swiftbeans.yml` toggle (2026-10-15)

@@ -373,6 +373,7 @@ struct AssistedArgument {
 - **Memberwise** parameters: stored `let`/`var` without accessors, not `static`/`lazy`, in declaration order; `let x = …` excluded; `var x: T = …` → `hasDefault`. A stored property with an attribute (property wrapper) and no declared init → diagnostic.
 - **Defaulted parameter of type `T?`** is looked up as `T`.
 - **Assisted parameters** (`ParameterInfo.isAssisted`) get `assisted = AssistedArgument(label:internalName:typeSpelling:)` and `key = nil`. The resolver does no key normalization for them, so the key restrictions (optionals, tuples, functions…) produce no `key.unsupported` error. If the provider has any assisted parameter, `BeanProvider.scope` is forced to `.transient`.
+- **Factory parameters** (`ParameterInfo.factory`, a function-typed dependency): `BeanParameter.factory` carries the parsed `FactoryType` and `key` is `nil`. `FactoryBinding.resolve` matches it against the provider of its return key (deferred / assisted / missing / mismatch); `GraphValidator` reports mismatches and skips factory parameters in cycle detection; `CodeGenerator` emits the closure. See `specs/factory-injection/SPEC.md`.
 - **Assisted diagnostics** (errors, from the resolver, only for the *selected* initializer / `@Bean` method; assisted parameters elsewhere have no effect, SPEC rule 8):
 
   | id | Location | When |
