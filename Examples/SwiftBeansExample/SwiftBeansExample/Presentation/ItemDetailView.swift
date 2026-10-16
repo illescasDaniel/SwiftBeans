@@ -41,7 +41,7 @@ struct ItemDetailView: View {
 #if DEBUG
 #Preview("ItemDetailView") {
 	let context = FakeAppContext()
-	NavigationStack {
+	PreviewRootView(coordinator: context.appCoordinator) {
 		ItemDetailView(
 			viewModel: context.itemDetailViewModel(item: Item(id: 1, title: "Preview", detail: "Body"))
 		)

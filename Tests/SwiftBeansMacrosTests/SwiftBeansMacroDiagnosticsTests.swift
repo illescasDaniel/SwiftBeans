@@ -221,6 +221,89 @@ struct SwiftBeansMacroDiagnosticsTests {
 		)
 	}
 
+	// MARK: - named:
+
+	@Test(arguments: [
+		"@Bean(named: \"snakeCase\")",
+		"@Bean(named: \"_test2\", scope: .transient)",
+		"@Bean(named: #\"raw\"#)",
+	])
+	func `Given a Bean with a literal name When expanded Then there are no diagnostics`(attribute: String) {
+		expectExpansion(
+			"""
+			enum Coding {
+				\(attribute)
+				static func decoder() -> JSONDecoder { JSONDecoder() }
+			}
+			""",
+			expandedSource: """
+			enum Coding {
+				static func decoder() -> JSONDecoder { JSONDecoder() }
+			}
+			"""
+		)
+	}
+
+	@Test(arguments: [
+		"@Service(named: \"memory\")",
+		"@Service(named: \"memory\", scope: .transient)",
+		"@Service(boundTo: Store.self, named: \"memory\")",
+		"@Service(boundTo: Store.self, named: \"memory\", scope: .singleton)",
+	])
+	func `Given a Service with a literal name When expanded Then there are no diagnostics`(attribute: String) {
+		expectExpansion(
+			"""
+			\(attribute)
+			final class MemoryStore {
+			}
+			""",
+			expandedSource: """
+			final class MemoryStore {
+			}
+			"""
+		)
+	}
+
+	@Test(arguments: [
+		("named: prefix", "named: must be a string literal"),
+		("named: \"snake\\(x)\"", "named: must be a string literal"),
+		("named: \"snake-case\"", "qualifier name \"snake-case\" must start with a letter or '_' and contain only letters, digits and '_'"),
+		("named: \"\"", "qualifier name \"\" must start with a letter or '_' and contain only letters, digits and '_'"),
+		("named: \"1st\"", "qualifier name \"1st\" must start with a letter or '_' and contain only letters, digits and '_'"),
+	])
+	func `Given a Bean with an invalid name When expanded Then the error is at the argument`(argument: String, message: String) {
+		expectExpansion(
+			"""
+			enum Coding {
+				@Bean(\(argument))
+				static func decoder() -> JSONDecoder { JSONDecoder() }
+			}
+			""",
+			expandedSource: """
+			enum Coding {
+				static func decoder() -> JSONDecoder { JSONDecoder() }
+			}
+			""",
+			diagnostics: [DiagnosticSpec(message: message, line: 2, column: 15)]
+		)
+	}
+
+	@Test
+	func `Given a Service with an invalid name When expanded Then the error is at the argument`() {
+		expectExpansion(
+			"""
+			@Service(boundTo: Store.self, named: Names.memory)
+			final class MemoryStore {
+			}
+			""",
+			expandedSource: """
+			final class MemoryStore {
+			}
+			""",
+			diagnostics: [DiagnosticSpec(message: "named: must be a string literal", line: 1, column: 38)]
+		)
+	}
+
 	// MARK: - @Service
 
 	@Test(arguments: ["protocol Store", "enum Store"])

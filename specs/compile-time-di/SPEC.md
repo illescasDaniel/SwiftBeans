@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Feature | `compile-time-di` |
-| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15; amendment "Runtime arguments (`@Assisted`)" approved — 2026-10-15 |
+| Status | Approved (Phase 1) — 2026-10-14; amendment "Generator rules" + "Singleton storage" approved — 2026-10-15; amendment "Runtime arguments (`@Assisted`)" approved — 2026-10-15; factory injection split into `specs/factory-injection/SPEC.md` |
 | Swift tools | 6.4+ (matches `Package.swift`) |
 | Platforms | macOS first; Apple platforms + Linux as package allows |
 | Related targets (planned) | `SwiftBeans` (public API + re-exported macros), `SwiftBeansMacros` (macro plugin), `SwiftBeansPlugin` / generator executable (build tool), tests |
@@ -181,11 +181,15 @@ The scan set is defined by the build system and the config file, never by guessi
 1. **Target sources come from the build system.** The plugin scans exactly the Swift files the build system reports as the target's compiled sources (SPM: the source target's source files; Xcode: the target's input files). It does not walk folders, infer a "source root", or look for specific file names (e.g. an `App` entry file or `Assets.xcassets`). Files on disk that are not members of the target (excluded files, other targets' files, test sources in the same folder) are never scanned.
 2. **One config location, no upward search.** The config file is looked up only at the root of the package (SPM) or the folder containing the `.xcodeproj` (Xcode). The plugin passes its path to the generator explicitly. Neither the plugin nor the generator searches parent folders. A `.swiftbeans.yml` above that root (e.g. in `~` or an enclosing repo) has no effect. If the config file is absent, only the target's own sources are scanned.
 3. **Local package sources are resolved from `Sources/<target>`.** Each `local_packages` entry's `path` is resolved relative to the folder containing the config file and normalized (`..` and symlinks resolved). The path must be a folder containing a `Package.swift`, and each listed target must have a `Sources/<target>/` folder; all `.swift` files under it (recursively) are scanned. Packages whose targets use a custom `path:` in their manifest are out of scope for v1.
-4. **Every scanned file is a declared build input.** The target sources, every resolved local package source, and the config file itself are declared as inputs of the generation step, so editing any of them regenerates the wiring on the next build. (Adding a *new* file to a local package is picked up when the build system re-plans the plugin; see Known limitations.)
-5. **Config mistakes fail the build.** A config that cannot be read, a `local_packages` path that does not exist or has no `Package.swift`, a missing `Sources/<target>/` folder, or YAML outside the documented schema (block lists of `path` / `targets`, optional single or double quotes, `#` comments) fails the build with a diagnostic naming the config file and the offending entry. Nothing is skipped silently.
+4. **The scan set is re-resolved every time the generator runs.** The plugin only tells the generator *where* to scan: the scan root, the target's source list from the build system, and the config file name. The generator re-reads `.swiftbeans.yml` (when present) and re-walks each listed `Sources/<target>/` folder on every run, so the plan-time file list is never the source of truth for the generated wiring. The generator is rerun when the build system sees a change in a declared input: the target sources, the config file, every local package source, and the **folders** containing them (adding or removing a file changes its folder's modification date, which plugins can declare but not watch otherwise). The scan root folder is also an input, so a `.swiftbeans.yml` created later is picked up without re-planning. Output is written only when its bytes change, so an unchanged graph does not recompile.
+5. **Config mistakes fail the build.** A config that cannot be read, a `local_packages` path that does not exist or has no `Package.swift`, a missing `Sources/<target>/` folder, or YAML outside the documented schema (block lists of `path` / `targets`, optional single or double quotes, `#` comments) fails the build with a diagnostic naming the config file and the offending entry (reported by the generator when it runs). Nothing is skipped silently.
 6. **Stable scan order.** The scan set is de-duplicated by resolved path and sorted before parsing, so generated output does not depend on the order the build system lists files.
 
-**Known limitations (v1):** a new `.swift` file added to a local package may need a clean build or project re-plan in Xcode before it joins the graph, because build plugins cannot watch folders.
+**Known limitations (v1):**
+
+- SwiftPM forbids prebuild commands that use an executable built from source ("a prebuild command cannot use executables built from source"), so the generator runs as a build command whose inputs include the folders above rather than as an unconditional prebuild. The generator's own scan is always fresh, but *when* it reruns depends on the build system noticing a declared input change.
+- Inputs are declared from the plan-time scan. A file added to a folder that did not exist at plan time (a brand-new subfolder, or a target folder that was empty) reruns the generator through its parent folder, but further files added to that new folder may not rerun it until the plugin is planned again (any edit to the target's sources or to `.swiftbeans.yml` re-plans it).
+- Adding a package or target to `.swiftbeans.yml` reruns the generator (the config is an input), but edits to the new package's existing files only rerun it once the plugin is planned again.
 
 ### Generator rules
 
@@ -216,7 +220,7 @@ A key is the type a provider produces (`@Service` type or its `boundTo:`, `@Bean
 1. **Spelling normalized from syntax**, not raw text: whitespace and redundant parentheses do not matter (`[String:Int]` ≡ `[String: Int]`, `(any P)` ≡ `any P`), and `Array<T>` / `Dictionary<K, V>` match their sugared forms `[T]` / `[K: V]`.
 2. **`any P` ≡ `P`.** A protocol spelled with and without `any` is one key (e.g. `@Service(boundTo: Store.self)` satisfies `init(store: any Store)`). The generated accessor and protocol requirement use the `any P` spelling when any declaration in the graph spells that key with `any`; otherwise `P`.
 3. **Qualified names and typealiases are matched by spelling.** `Swift.String` and `String` are different keys, as are a typealias and its underlying type. When a dependency is missing and a provider exists whose key has the same last component, the diagnostic names it as a likely match.
-4. **Unsupported key types fail the build** at the declaration: optionals (`T?`, `T!`), tuples, function types, opaque types (`some P`), metatypes, `Self`, protocol compositions (`any A & B`), and generic parameters.
+4. **Unsupported key types fail the build** at the declaration: optionals (`T?`, `T!`), tuples, function types (as keys; see `specs/factory-injection/SPEC.md` for factory parameters), opaque types (`some P`), metatypes, `Self`, protocol compositions (`any A & B`), and generic parameters.
 
 #### Accessor names
 
@@ -245,6 +249,7 @@ Two keys that produce the same accessor name fail the build, naming both provide
 4. **Defaulted parameters are optional dependencies.** A parameter with a default value is injected when the graph provides its key (for `T? = …`, the key `T`) and otherwise left to its default. It never causes a missing-dependency error, and it only participates in cycle detection when it is injected. A parameter without a default must have a supported, provided key.
 5. **Scope literal.** `scope:` must be `.singleton` or `.transient`, optionally spelled `BeanScope.…` or `SwiftBeans.BeanScope.…`. Any other expression fails the build (it cannot be evaluated at build time).
 6. **Providers from local packages must be public.** A `@Service` declared in a local package target must be `public` / `open` with a `public` selected initializer (a memberwise initializer is never public); a `@Bean` must be `public static` in a `public` configuration type. Otherwise the build fails at that declaration, since the app's generated code cannot call it.
+7. **Collection parameters.** A `[E]` parameter with no `[E]` provider may be supplied by every bean that is an `E` (multi-bind); see `specs/collection-injection/SPEC.md`.
 
 #### Assisted providers
 
@@ -253,7 +258,7 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 1. **Method accessor.** It gets `func <accessorName>(<assisted parameters>) -> <Key>` on the context and the same requirement on `{Context}Protocol`, instead of a property. The accessor name follows the usual rules for its key. The method's parameters are the assisted parameters in declaration order, each with its external label, internal name and type spelled as in the source (`_` labels are kept). Assisted parameter types are not keys, so the key restrictions (optionals, tuples, functions…) do not apply to them.
 2. **Construction.** The generated call passes every parameter in the initializer's order: assisted ones from the method's arguments, the rest from the graph under the normal rules (required keys must be provided; defaulted ones are optional dependencies).
 3. **Always a new instance.** Each call constructs a new instance, so an assisted provider is transient whether or not `scope:` is written. An explicit `scope: .singleton` fails the build at the `scope:` argument.
-4. **Not injectable.** The graph cannot supply runtime arguments, so another provider that depends on an assisted provider's key fails the build at that parameter, naming the method to call instead. A defaulted parameter with that key keeps its default. (Injecting a factory such as `(Item) -> ItemDetailViewModel` is deferred; see Out of scope.)
+4. **Not injectable.** The graph cannot supply runtime arguments, so another provider that depends on an assisted provider's key fails the build at that parameter, naming the method to call instead. A defaulted parameter with that key keeps its default. (A factory such as `(Item) -> ItemDetailViewModel` can be injected instead; see `specs/factory-injection/SPEC.md`.)
 5. **Graph rules still apply.** Assisted providers count for duplicate keys, accessor-name collisions, and cycle detection over their injected parameters.
 6. **Unsupported in v1** (each fails the build at the parameter): a default value on an `@Assisted` parameter, and `inout` or variadic `@Assisted` parameters.
 7. **Parameters only.** `@Assisted` on a stored property of a scanned type fails the build at the attribute.
@@ -276,12 +281,14 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 	- Cycle → an error at the first provider in the cycle (by sort order) with a `note:` at each other provider in it.
 	- Accessor-name collision → an error at each provider.
 	- Unsupported declaration or key → the attribute or type that is unsupported.
-4. **Misuse visible from one declaration is diagnosed by the macro** at that declaration (e.g. `@Bean` not `static`, no return type, `throws` / `async`; `@Service` on a protocol or enum; a non-literal `scope:`), so Xcode shows it inline while editing. The generator does not report the same problem a second time.
+4. Warnings use the same format with `warning:` and never fail the build. The only warning is `bean.directCall` (a `@Bean` / `@Service` initializer body calling another `@Bean` directly), specified in [`specs/inter-bean-call-diagnostic/SPEC.md`](../inter-bean-call-diagnostic/SPEC.md).
+5. **Misuse visible from one declaration is diagnosed by the macro** at that declaration (e.g. `@Bean` not `static`, no return type, `throws` / `async`; `@Service` on a protocol or enum; a non-literal `scope:`), so Xcode shows it inline while editing. The generator does not report the same problem a second time.
 
 #### Generated file
 
 1. The generator writes the output file only when its contents change, so unchanged wiring does not trigger downstream recompiles.
 2. Output is a pure function of the scanned sources: declarations, imports and diagnostics are in a stable order.
+3. After a successful generation the generator also writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot` (the resolved bean graph) next to it. See `specs/graph-dump/SPEC.md`.
 
 ### Singleton storage (runtime)
 
@@ -292,7 +299,7 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 
 ## Behavioral rules
 
-1. **Compile-time completeness:** If a required (non-defaulted, non-`@Assisted`) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph, the build fails with a diagnostic at that parameter.
+1. **Compile-time completeness:** If a required (non-defaulted, non-`@Assisted`) initializer or `@Bean` parameter type is not provided by any `@Bean` / `@Service` in the scanned graph (or, for a collection parameter, by multi-bind; see `specs/collection-injection/SPEC.md`), the build fails with a diagnostic at that parameter.
 2. **No cycles:** Cyclic dependency graphs fail the build.
 3. **Duplicates:** Two providers for the same injectable key (normalized type; see Generator rules → Injectable keys) fail the build.
 4. **Plain types stay plain:** Prefer constructor injection. `@Service` types remain manually constructible in tests without the generated context.
@@ -409,6 +416,18 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 **And** the app has built once  
 **When** `Greeter`'s initializer gains a dependency provided by the graph and the app builds again  
 **Then** the generator runs again and the generated accessor passes the new dependency
+
+### Scenario: Adding a file to a local package joins the graph without a clean build
+
+**Given** a `.swiftbeans.yml` listing a local package target, and the app has built once  
+**When** a new `.swift` file with a `@Service` is added under that target's `Sources/<target>/` folder (including a nested folder) and the app builds again  
+**Then** the generator runs again, re-walks the folder, and that `@Service` is part of the graph
+
+### Scenario: Creating the config later is picked up
+
+**Given** an app that has built with no `.swiftbeans.yml`  
+**When** a `.swiftbeans.yml` listing a local package target is created and the app builds again  
+**Then** that target's `@Service` types join the graph without a clean build
 
 ### Scenario: Editing the config regenerates the wiring
 
@@ -620,7 +639,7 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - `@Service` synthesizing protocol conformances or registration markers (attribute-only)
 - Instance (non-static) `@Bean` methods
 - `@Autowired` property injection, field injection, method injection
-- Spring AOP, `@Transactional`, proxies, named qualifiers (deferred)
+- Spring AOP, `@Transactional`, proxies (named qualifiers: see [`specs/qualifiers/SPEC.md`](../qualifiers/SPEC.md))
 - Context arguments (values passed into the `@ApplicationContext` initializer and injected as beans) — deferred
 - Annotated declarations inside `#if` blocks (fail the build in v1)
 - Matching keys across typealiases or module-qualified spellings (matched by spelling; diagnostics hint at near matches)
@@ -628,9 +647,9 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - Request / session / Web scopes
 - SwiftUI `@Environment` bridges (may be later)
 - Subcontexts (candidate for v1.1)
-- Injecting assisted factories into other beans (e.g. a bean taking `(Item) -> ItemDetailViewModel`); assisted providers are only reachable from the context in v1
+- Function types as provider keys or `@Bean` return types. Injecting factories as dependency parameters (`(Item) -> ItemDetailViewModel`, `() -> T`) is specified in `specs/factory-injection/SPEC.md`
 - Default values on `@Assisted` parameters
-- Circular dependencies broken via lazy/`ObjectFactory` (fail instead)
+- Circular dependencies are an error, except through deferred / assisted factory parameters (see `specs/factory-injection/SPEC.md`)
 - Drop-in compatibility with Sword, Pin, Needle, Swinject, or Factory
 - Generating fake / mock `@ApplicationContext` implementations (apps hand-write fakes against `{Context}Protocol`)
 
@@ -647,7 +666,7 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Multi-module scan | YAML config (supports Xcode apps without `Package.swift`) |
 | Source discovery | Build-system file list + `.swiftbeans.yml` at the package/project root only; no folder heuristics or upward search (2026-10-15) |
 | `@Bean` methods | Must be `static` |
-| Named qualifiers | Deferred (no v1 BDD requirement) |
+| Named qualifiers | See [`specs/qualifiers/SPEC.md`](../qualifiers/SPEC.md) |
 | Context protocol name | `{ContextTypeName}Protocol` (e.g. `AppContextProtocol`); fakes are user-owned |
 | Key matching | Normalized syntax; `any P` ≡ `P`; qualified names / typealiases by spelling (2026-10-15) |
 | Accessor names | Derived from the key with defined rules for nested, collection and generic types; keywords escaped; collisions fail (2026-10-15) |
@@ -657,6 +676,7 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Diagnostics | `file:line:column`, all errors per run, stable order; single-declaration misuse via macros (2026-10-15) |
 | Singleton creation | Factory runs at most once per context, even under concurrent first access (2026-10-15) |
 | Runtime arguments | `@Assisted` parameter wrapper; assisted providers become context methods, are always transient and not injectable (2026-10-15) |
+| Collection injection | `[E]` multi-binds every bean that is an `E` when no `[E]` bean exists; own spec `specs/collection-injection/SPEC.md` (2026-10-15) |
 
 ## Phase gate
 

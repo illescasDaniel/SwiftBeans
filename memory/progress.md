@@ -77,30 +77,36 @@
 - [x] README with installation, concepts, scopes, `@Inject`, `@Assisted`, `{Context}Protocol` fakes, `.swiftbeans.yml`, rules (2026-10-15)
 - [x] `.claude/skills` and `.claude/rules/*.md` symlinked to `.cursor/` (2026-10-15)
 
+### Done (continued)
+
+- [x] Inter-bean call diagnostic slice: `specs/inter-bean-call-diagnostic/SPEC.md`, `DirectCallAnalyzer`, `bean.directCall` warning, `GeneratorDirectCallTests` (15)
+- [x] Linux fixes: generator stderr via `FileHandle` (Swift 6 rejects `fputs(_, stderr)`); `GeneratedFileWriterTests` mtime compared with 1 s tolerance (2026-10-15)
+
 ### Open
 
-- [ ] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel`, so a bean (coordinator) can create assisted objects without holding the context
+- [x] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel` — done on `cursor/factory-injection-53df` (2026-10-15)
 
 - [x] Published as public repo `illescasDaniel/SwiftBeans`, MIT license, tag + release `0.1.0` (2026-10-15)
+- [x] Tag + release `0.2.0` (qualifiers, factories, collection injection, graph dump, inter-bean diagnostic, local-package scan refresh, CI, example showcase) (2026-10-16)
 
 ### Possible future improvements (to review; each needs its own spec)
 
-Suggested order: CI first, then factory injection, then qualifiers.
+Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 → #4 → #2 → #7 → #6 → #5, then #1.
 
 - [x] CI: GitHub Action (`.github/workflows/ci.yml`, `xcode-27` runner, Xcode 27.0) running `swift test` + example macOS tests and iOS Simulator build; README badge; `CHANGELOG.md` (2026-10-15). Releases stay semver `0.x` while the API may break
-- [ ] Factory injection (same item as the backlog above): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
-- [ ] Qualifiers: `@Bean(named: "snakeCase")` / `@Service(named:)` + `@Qualifier("snakeCase") decoder: JSONDecoder`. Notes from the 2026-10-15 discussion:
-	- Key is (type, qualifier), not a global name: `snakeCase` on `JSONDecoder` and on `JSONEncoder` are different beans
-	- Unqualified bean is the default; unknown (type, name) pair is a build error at the parameter; names must be string literals
-	- Unqualified parameter with only named beans of that type → build error (no implicit single-candidate pick)
-	- Accessor = qualifier + type (`snakeCaseJSONDecoder`); collision with a real type's accessor is a build error at both declarations (no numeric suffixes: unstable, unreadable). Maybe later: `accessor:` override
-	- `@Qualifier` as a marker property wrapper on parameters (same trick as `@Assisted`); works with protocol-bound beans; `{Context}Protocol` gains qualified accessors
-	- Acceptance criterion: a graph without qualifiers generates byte-identical output to today
-- [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
-- [ ] Graph dump: plugin emits a Markdown/DOT file of the resolved graph for debugging and onboarding
-- [ ] Fix known limitation: a new file in a local package may need a clean build before it joins the graph
-- [ ] Later / bigger: child contexts (e.g. a logged-in-user scope created and destroyed at runtime)
-- [ ] Investigate Spring-style inter-bean calls (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
+- [x] Factory injection (`specs/factory-injection/SPEC.md`): `(Item) -> ItemDetailViewModel` and deferred `() -> T`. Factories resolve against the unqualified provider of the return type.
+- [x] Qualifiers (`specs/qualifiers/SPEC.md`): `@Bean(named:)` / `@Service(named:)` + `@Qualifier("…")`, `BeanKey`. Optional later: `accessor:` override; example-app demo
+- [x] Collection injection (`specs/collection-injection/SPEC.md`): `[any P]` / `[P]` multi-bind via `ParameterInjection` (spec approval still pending). Named providers of the element type join collections by type.
+- [x] Graph dump (`specs/graph-dump/SPEC.md`): `SwiftBeansGraph.md` + `SwiftBeansGraph.dot`. Future: `.swiftbeans.yml` toggle
+- [x] Local-package scan refresh: generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs
+- [x] Inter-bean call diagnostic (`specs/inter-bean-call-diagnostic/SPEC.md`): warning `bean.directCall`
+- [x] Child contexts Phase 1: `specs/child-contexts/SPEC.md` drafted (+ proposed `ARCHITECTURE.md` stub); awaiting approval
+- [x] Integration merge on `feature/improvements` + `swift test` green (201 tests / 19 suites, 2026-10-16). Example app combined check still optional.
+- [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
+- [x] Example app: qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`), collection injection (`[any FeatureNote]`), factories already on `AppCoordinator`. macOS `xcodebuild test` green (2026-10-16). Duplicate `printError` in `SwiftBeansGeneratorMain` fixed in the same pass (`swift test` does not build the generator executable)
+- [x] Example previews use `PreviewRootView` (debug-only, custom root) so `coordinator.path` is bound; `AppRootView` is constructed only from `@main` (2026-10-16)
+- [ ] Child contexts: approval, Phase 2 contracts, tests, implementation (Phases 0 / A / B–D per the spec; see open questions first)
+- [ ] Investigate Spring-style inter-bean calls (diagnostic slice done; remaining: proxies / instance `@Bean` / macro rewriting, options in `specs/inter-bean-call-diagnostic/SPEC.md` Future work) (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance
 	- Swift has no runtime subclass proxies, and `enum`/`struct` configurations can't be overridden; candidates: macro-rewritten bodies, a configuration instance owned by the context that forwards to accessors, or generating a subclass of a `class` configuration
-	- Cheap first step regardless: a build diagnostic when a `@Bean` body calls another `@Bean` directly, suggesting a parameter instead
+	- ~~Cheap first step regardless: a build diagnostic when a `@Bean` body calls another `@Bean` directly, suggesting a parameter instead~~ (done: warning `bean.directCall`)

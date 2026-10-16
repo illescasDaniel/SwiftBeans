@@ -46,7 +46,12 @@ indirect enum TypeKey: Hashable, Sendable, Comparable, CustomStringConvertible {
 
 	/// SPEC accessor naming; Swift keywords come back escaped (`` `class` ``).
 	var accessorName: String {
-		let name = Self.lowercasingLeadingWord(namePieces.joined())
+		accessorName(prefix: "")
+	}
+
+	/// `prefix` then the name pieces, lowercased as one name: `snakeCase` + `JSONDecoder` → `snakeCaseJSONDecoder`.
+	func accessorName(prefix: String) -> String {
+		let name = Self.lowercasingLeadingWord(prefix + namePieces.joined())
 		return Self.keywords.contains(name) ? "`\(name)`" : name
 	}
 
@@ -170,6 +175,27 @@ enum KeyNormalization {
 		return nil
 	}
 
+	/// True for `[any P]` / `Array<any P>`: the consumer accepts zero or more implementations.
+	static func elementSpelledWithAny(_ type: TypeSyntax) -> Bool {
+		let type = strippingParentheses(type)
+		var element: TypeSyntax?
+		if let array = type.as(ArrayTypeSyntax.self) {
+			element = array.element
+		} else if let identifier = type.as(IdentifierTypeSyntax.self), identifier.name.text == "Array",
+		          let arguments = identifier.genericArgumentClause?.arguments, arguments.count == 1
+		{
+			element = arguments.first?.argument
+		}
+		guard let element else { return false }
+		return strippingParentheses(element).as(SomeOrAnyTypeSyntax.self)?.someOrAnySpecifier.tokenKind == .keyword(.any)
+	}
+
+	/// Parses `spelling` as a type, then checks `elementSpelledWithAny` (tests).
+	static func elementSpelledWithAny(forSpelling spelling: String) -> Bool {
+		var parser = Parser(spelling)
+		return elementSpelledWithAny(TypeSyntax.parse(from: &parser))
+	}
+
 	private static func normalize(_ type: TypeSyntax) throws(UnsupportedKey) -> TypeKey {
 		let type = strippingParentheses(type)
 		if let identifier = type.as(IdentifierTypeSyntax.self) {
@@ -231,5 +257,84 @@ enum KeyNormalization {
 			type = element.type
 		}
 		return type
+	}
+}
+
+/// A function-typed dependency parameter: `(Item) -> ItemDetailViewModel`, `() -> T`.
+struct FactoryType: Equatable, Sendable {
+	/// Canonical spellings (`FactoryNormalization.canonicalSpelling`), in order.
+	var parameterTypes: [String]
+	var returnKey: TypeKey
+	var returnSpelledWithAny: Bool
+
+	/// `(Item) -> ItemDetailViewModel`
+	var description: String {
+		"(\(parameterTypes.joined(separator: ", "))) -> \(returnKey)"
+	}
+}
+
+/// Why a function type cannot be a factory.
+struct UnsupportedFactory: Error, Equatable, Sendable, CustomStringConvertible {
+	var description: String
+}
+
+enum FactoryNormalization {
+	/// `nil` when `type` is not a function type; attributes (`@escaping`, `@Sendable`) and parentheses are looked through.
+	static func factory(for type: TypeSyntax) -> Result<FactoryType, UnsupportedFactory>? {
+		guard let function = functionType(type) else { return nil }
+		var parameterTypes: [String] = []
+		for element in function.parameters {
+			if element.ellipsis != nil {
+				return .failure(UnsupportedFactory(description: "factory parameters cannot be variadic"))
+			}
+			if let attributed = element.type.as(AttributedTypeSyntax.self), !attributed.specifiers.isEmpty {
+				return .failure(UnsupportedFactory(description: "factory parameters cannot be inout, borrowing, consuming or sending"))
+			}
+			parameterTypes.append(KeyNormalization.canonicalSpelling(of: element.type))
+		}
+		switch KeyNormalization.key(for: function.returnClause.type) {
+		case .success(let normalized):
+			if normalized.key == .nominal([.init("Void")]) {
+				return .failure(UnsupportedFactory(description: "the factory's return type is not injectable: Void cannot be injected"))
+			}
+			return .success(FactoryType(
+				parameterTypes: parameterTypes,
+				returnKey: normalized.key,
+				returnSpelledWithAny: normalized.spelledWithAny
+			))
+		case .failure(let unsupported):
+			return .failure(UnsupportedFactory(description: "the factory's return type is not injectable: \(unsupported)"))
+		}
+	}
+
+	private static func functionType(_ type: TypeSyntax) -> FunctionTypeSyntax? {
+		var type = type
+		while true {
+			if let function = type.as(FunctionTypeSyntax.self) {
+				return function
+			}
+			if let attributed = type.as(AttributedTypeSyntax.self) {
+				type = attributed.baseType
+			} else if let tuple = type.as(TupleTypeSyntax.self), tuple.elements.count == 1,
+			          let element = tuple.elements.first, element.firstName == nil, element.ellipsis == nil
+			{
+				type = element.type
+			} else {
+				return nil
+			}
+		}
+	}
+}
+
+extension KeyNormalization {
+	/// Comparable spelling for assisted-factory matching: the key's description when `type` is a valid key,
+	/// otherwise the spelling without whitespace and `@escaping`.
+	static func canonicalSpelling(of type: TypeSyntax) -> String {
+		if case .success(let normalized) = key(for: type) {
+			return normalized.key.description
+		}
+		return type.trimmedDescription
+			.replacingOccurrences(of: "@escaping", with: "")
+			.filter { !$0.isWhitespace }
 	}
 }

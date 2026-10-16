@@ -1,11 +1,11 @@
-/// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, assisted keys, cycles.
+/// Graph-level checks: duplicate keys, accessor collisions, missing dependencies, factories, assisted keys, cycles.
 ///
-/// Every check iterates providers sorted by `(key, location)`, never dictionary order.
+/// Keys are `(type, qualifier)`. Every check iterates providers sorted by `(key, location)`, never dictionary order.
 enum GraphValidator {
 	static func validate(_ providers: [BeanProvider]) -> [GeneratorDiagnostic] {
-		let providers = providers.sorted { ($0.key.description, $0.location) < ($1.key.description, $1.location) }
+		let providers = providers.sorted { ($0.key, $0.location) < ($1.key, $1.location) }
 		var diagnostics: [GeneratorDiagnostic] = []
-		var byKey: [TypeKey: [Int]] = [:]
+		var byKey: [BeanKey: [Int]] = [:]
 		for (index, provider) in providers.enumerated() {
 			byKey[provider.key, default: []].append(index)
 		}
@@ -18,50 +18,103 @@ enum GraphValidator {
 				diagnostics.append(GeneratorDiagnostic(
 					id: "graph.duplicateProvider",
 					location: providers[index].location,
-					message: "duplicate provider for '\(key)'; also provided by \(others)"
+					message: "duplicate provider for \(key.quoted); also provided by \(others)"
 				))
 			}
 		}
 
-		// 2. Accessor-name collisions between different keys.
-		var keysByAccessor: [String: [TypeKey]] = [:]
+		// 2. Accessor-name collisions between different keys (a qualified key is never renamed to avoid one).
+		var keysByAccessor: [String: [BeanKey]] = [:]
 		for key in byKey.keys.sorted() {
 			keysByAccessor[key.accessorName, default: []].append(key)
 		}
 		for accessor in keysByAccessor.keys.sorted() where keysByAccessor[accessor]!.count > 1 {
 			let keys = keysByAccessor[accessor]!
-			let names = keys.map { "'\($0)'" }.joined(separator: " and ")
+			let names = keys.map(\.quoted).joined(separator: " and ")
+			let fix = keys.contains { $0.qualifier != nil }
+				? "rename a qualifier or bind one of them to a different type"
+				: "bind one of them to a different type"
 			for key in keys {
 				for index in byKey[key]! {
 					diagnostics.append(GeneratorDiagnostic(
 						id: "graph.accessorCollision",
 						location: providers[index].location,
-						message: "accessor name '\(accessor)' is produced by both \(names); bind one of them to a different type"
+						message: "accessor name '\(accessor)' is produced by both \(names); \(fix)"
 					))
 				}
 			}
 		}
 
-		// 3. Missing dependencies.
-		for provider in providers {
+		func didYouMean(_ type: TypeKey) -> [GeneratorDiagnostic] {
+			providers
+				.filter { $0.key.type.lastComponentName != nil && $0.key.type.lastComponentName == type.lastComponentName }
+				.map {
+					GeneratorDiagnostic(
+						severity: .note,
+						id: "graph.didYouMean",
+						location: $0.location,
+						message: "did you mean \($0.key.quoted) (provided by '\($0.displayName)')?"
+					)
+				}
+		}
+
+		// 3. Missing dependencies (a `[E]` parameter may be supplied by the members of `E`).
+		let injection = ParameterInjection(providers)
+		for (index, provider) in providers.enumerated() {
 			for parameter in provider.parameters {
-				guard let key = parameter.key, !parameter.hasDefault, byKey[key] == nil else { continue }
-				let notes = providers
-					.filter { $0.key.lastComponentName != nil && $0.key.lastComponentName == key.lastComponentName }
-					.map {
-						GeneratorDiagnostic(
-							severity: .note,
-							id: "graph.didYouMean",
-							location: $0.location,
-							message: "did you mean '\($0.key)' (provided by '\($0.displayName)')?"
-						)
-					}
+				guard let key = parameter.key, !parameter.hasDefault, injection.injection(for: parameter, of: index) == nil else { continue }
+				// An unqualified parameter never picks a named provider, even a single one.
+				let named = key.qualifier == nil ? providers.filter { $0.key.type == key.type } : []
+				if !named.isEmpty {
+					diagnostics.append(GeneratorDiagnostic(
+						id: "graph.missingDependency",
+						location: parameter.location,
+						message: "missing dependency \(key.quoted) required by '\(provider.displayName)'; only named providers exist, add @Qualifier(\"…\") to the parameter",
+						notes: named.map {
+							GeneratorDiagnostic(
+								severity: .note,
+								id: "graph.namedCandidate",
+								location: $0.location,
+								message: "use @Qualifier(\"\($0.key.qualifier!)\") for '\($0.displayName)'"
+							)
+						}
+					))
+					continue
+				}
 				diagnostics.append(GeneratorDiagnostic(
 					id: "graph.missingDependency",
 					location: parameter.location,
-					message: "missing dependency '\(key)' required by '\(provider.displayName)'",
-					notes: notes
+					message: "missing dependency \(key.quoted) required by '\(provider.displayName)'",
+					notes: didYouMean(key.type)
 				))
+			}
+		}
+
+		// 3b. Factory parameters: the return type matches the unqualified provider of that type.
+		let firstByType = { (type: TypeKey) in byKey[BeanKey(type)]?.first.map { providers[$0] } }
+		for provider in providers {
+			for parameter in provider.parameters {
+				guard let factory = parameter.factory, !parameter.hasDefault else { continue }
+				switch FactoryBinding.resolve(factory, providersByKey: firstByType) {
+				case .deferred, .assisted:
+					break
+				case .missing:
+					diagnostics.append(GeneratorDiagnostic(
+						id: "graph.missingDependency",
+						location: parameter.location,
+						message: "missing dependency '\(factory.returnKey)' required by '\(provider.displayName)' (factory '\(factory.description)')",
+						notes: didYouMean(factory.returnKey)
+					))
+				case .mismatch(let target, let expected):
+					let reason = target.isAssisted
+						? "'\(target.displayName)' takes runtime arguments; inject it as '\(expected)'"
+						: "'\(factory.returnKey)' takes no runtime arguments; inject it as '() -> \(factory.returnKey)'"
+					diagnostics.append(GeneratorDiagnostic(
+						id: "factory.unresolved",
+						location: parameter.location,
+						message: "factory '\(factory.description)' required by '\(provider.displayName)' does not match: \(reason)"
+					))
+				}
 			}
 		}
 
@@ -75,15 +128,23 @@ enum GraphValidator {
 				diagnostics.append(GeneratorDiagnostic(
 					id: "assisted.notInjectable",
 					location: parameter.location,
-					message: "'\(key)' takes runtime arguments and cannot be injected into '\(provider.displayName)'; call '\(selector)' on the context instead"
+					message: "\(key.quoted) takes runtime arguments and cannot be injected into '\(provider.displayName)'; call '\(selector)' on the context instead"
 				))
 			}
 		}
 
-		// 5. Cycles over injected edges (an assisted provider is never a dependency).
-		let edges = providers.map { provider in
-			provider.parameters.compactMap { parameter in
-				parameter.key.flatMap { byKey[$0]?.first }.flatMap { providers[$0].isAssisted ? nil : $0 }
+		// 5. Cycles over injected edges (assisted never; factories lazy; collections depend on every member).
+		let edges = providers.indices.map { index in
+			providers[index].parameters.flatMap { parameter -> [Int] in
+				if parameter.factory != nil { return [] }
+				switch injection.injection(for: parameter, of: index) {
+				case .key(let key):
+					return byKey[key].flatMap { providers[$0[0]].isAssisted ? nil : [$0[0]] } ?? []
+				case .collection(let members):
+					return members
+				case nil:
+					return []
+				}
 			}
 		}
 		for component in StronglyConnectedComponents.find(nodeCount: providers.count, edges: edges) {

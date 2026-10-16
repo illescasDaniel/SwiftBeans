@@ -237,6 +237,24 @@ public struct GeneratorInput: Sendable, Codable, Equatable {
 	}
 }
 
+/// What the plugin hands the generator at plan time (`--request <file>.json`).
+///
+/// It names where to scan, not what to scan: the generator re-reads the config file and re-walks
+/// the local package folders on every build, so new files are picked up without a re-plan.
+public struct GeneratorRequest: Sendable, Codable, Equatable {
+	/// Package folder (SPM) or `.xcodeproj` folder (Xcode); the only place the config file is looked up.
+	public var scanRoot: String
+	/// Absolute paths of the target's Swift sources, as listed by the build system.
+	public var targetSources: [String]
+	public var configFileName: String
+
+	public init(scanRoot: String, targetSources: [String], configFileName: String = ".swiftbeans.yml") {
+		self.scanRoot = scanRoot
+		self.targetSources = targetSources
+		self.configFileName = configFileName
+	}
+}
+
 /// The `.swift` files of one `local_packages` target.
 struct LocalPackageTargetSources: Equatable, Sendable {
 	/// Target name as written in the config.

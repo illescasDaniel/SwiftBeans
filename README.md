@@ -27,8 +27,10 @@ Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Ca
 - [Concepts](#concepts)
 - [Scopes](#scopes)
 - [Binding to protocols](#binding-to-protocols)
+- [Collections: every bean of a kind](#collections-every-bean-of-a-kind)
 - [Choosing an initializer: `@Inject`](#choosing-an-initializer-inject)
 - [Runtime arguments: `@Assisted`](#runtime-arguments-assisted)
+- [Factories: `(Item) -> T` and `() -> T`](#factories-item---t-and----t)
 - [Testing and Previews: `{Context}Protocol`](#testing-and-previews-contextprotocol)
 - [Beans from local packages: `.swiftbeans.yml`](#beans-from-local-packages-swiftbeansyml)
 - [Rules worth knowing](#rules-worth-knowing)
@@ -45,7 +47,7 @@ The package exports two products: the `SwiftBeans` library and the `SwiftBeansPl
 
 ```swift
 dependencies: [
-	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.1.0")),
+	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.2.0")),
 ],
 targets: [
 	.target(
@@ -63,6 +65,8 @@ targets: [
 3. Trust the plugin and macros when Xcode asks (on CI, pass `-skipPackagePluginValidation -skipMacroValidation` to `xcodebuild`).
 
 The plugin writes `SwiftBeansGenerated.swift` into the build folder. You never edit or commit it.
+
+Next to it the plugin writes `SwiftBeansGraph.md` (providers and dependencies as tables) and `SwiftBeansGraph.dot` (Graphviz: `dot -Tsvg SwiftBeansGraph.dot -o graph.svg`), a quick way to see what is wired to what. With SwiftPM they are under `.build/plugins/outputs/<package>/<target>/destination/SwiftBeansPlugin/`; with Xcode, in the target's plugin work folder inside DerivedData (search for `SwiftBeansGraph.md`). They are only written when generation succeeds.
 
 ## Concepts
 
@@ -156,6 +160,29 @@ final class FetchItemsUseCase {
 
 A `@Bean` whose return type is a protocol (`-> any APIClient`) does the same.
 
+## Collections: every bean of a kind
+
+A parameter typed `[any P]` (or `[P]`) receives every bean that is a `P`, like Spring's `List<P>` injection. Useful for analytics trackers, HTTP interceptors and plugins:
+
+```swift
+@Service final class ConsoleTracker: AnalyticsTracker { init() { … } }
+@Service final class FirebaseTracker: AnalyticsTracker { init() { … } }
+
+@Service
+final class Analytics {
+	init(trackers: [any AnalyticsTracker]) { … }
+}
+
+// Generated
+Analytics(trackers: [self.consoleTracker, self.firebaseTracker])
+```
+
+- A bean is a member when its key is `P` (`boundTo: P.self`, `-> any P`) or its type declares `: P` in a scanned declaration or extension (also through a superclass or sub-protocol). Conformance is matched by spelling.
+- Members are listed by accessor name. Each keeps its own accessor and scope.
+- A bean that provides `[P]` itself (`@Bean static func trackers() -> [any AnalyticsTracker]`) wins over the members, and `@Bean static func tags() -> [String]` stays an ordinary bean.
+- No members: `[any P]` gets `[]`; `[P]` without `any` (e.g. `[String]`) is a missing dependency. A defaulted collection keeps its default.
+- Assisted beans are never members, and a bean is never a member of its own collection (so a composite `@Service(boundTo: P.self)` can wrap all the others).
+
 ## Choosing an initializer: `@Inject`
 
 With exactly one eligible initializer there is nothing to do. With several, mark the one the graph calls:
@@ -197,8 +224,60 @@ let viewModel = context.itemDetailViewModel(item: selectedItem)
 - `@Assisted` is a marker property wrapper: callers pass a plain `Item` and the initializer body sees a plain `Item`.
 - Labels and order are kept (`@Assisted _ id: Int` → `itemDetailViewModel(_ id: Int)`).
 - An assisted provider is always transient. An explicit `scope: .singleton` is a build error.
-- Other beans cannot inject an assisted type (the graph has no runtime arguments to give); the error names the method to call. Injecting factories such as `(Item) -> ItemDetailViewModel` is planned.
+- Other beans cannot inject an assisted type (the graph has no runtime arguments to give); the error names the method to call, or inject a [factory](#factories-item---t-and----t) instead.
 - Default values, `inout` and variadic `@Assisted` parameters are not supported yet.
+
+## Qualifiers: several beans of one type
+
+When you need two differently configured beans of the same type, name them and ask with `@Qualifier`:
+
+```swift
+@Configuration
+enum Coding {
+	@Bean
+	static func decoder() -> JSONDecoder { JSONDecoder() }
+
+	@Bean(named: "snakeCase")
+	static func snakeCaseDecoder() -> JSONDecoder {
+		let decoder = JSONDecoder()
+		decoder.keyDecodingStrategy = .convertFromSnakeCase
+		return decoder
+	}
+}
+
+@Service
+final class ItemParser {
+	init(@Qualifier("snakeCase") decoder: JSONDecoder, fallback: JSONDecoder) { … }
+}
+
+// Generated accessors: jsonDecoder, snakeCaseJSONDecoder
+```
+
+The key is `(type, name)`, so `snakeCase` on `JSONDecoder` and on `JSONEncoder` are unrelated. An unqualified parameter never silently picks a named bean. See [`specs/qualifiers/SPEC.md`](specs/qualifiers/SPEC.md).
+
+## Factories: `(Item) -> T` and `() -> T`
+
+A bean can take a function instead of a value, so it can create objects later or repeatedly without holding the context.
+
+```swift
+@Service(scope: .transient)
+final class Coordinator {
+	init(
+		makeDetail: @escaping (Item) -> ItemDetailViewModel, // assisted provider
+		makeList: @escaping () -> ItemListViewModel          // any other provider
+	) { … }
+}
+
+// Generated
+Coordinator(makeDetail: { self.itemDetailViewModel(item: $0) }, makeList: { self.itemListViewModel })
+```
+
+- `(A, B) -> T` is wired to `T`'s assisted method when `T`'s `@Assisted` parameter types are `A, B` in order. Labels on the function type are ignored (Swift erases them); a mismatch is a `factory.unresolved` error naming the expected signature.
+- `() -> T` re-reads `T`'s accessor on each call: a singleton returns the same instance, a transient a new one.
+- Factories are lazy, so they **break cycles**: `A` taking `() -> B` while `B` takes `A` is fine.
+- Function types work only as dependency parameters, not as bean return types or `boundTo:` keys.
+- The closure captures the context strongly: keep factories in transient beans (a coordinator), not singletons, if the context must be freed.
+- Factories resolve against the **unqualified** provider of the return type (see qualifiers above).
 
 ## Testing and Previews: `{Context}Protocol`
 
@@ -261,20 +340,20 @@ local_packages:
 - Providers in local packages must be `public` (type, selected initializer, or `public static` `@Bean` in a `public` configuration).
 - A wrong path, missing target folder or unsupported YAML fails the build with an error pointing at the entry.
 - Types from other dependencies (remote packages, SDKs) are registered with `@Bean`.
-- Known limitation: a new file added to a local package may need a clean build before it joins the graph.
+- Adding a file under a listed target (or creating/editing `.swiftbeans.yml`) regenerates the wiring on the next build; no clean build needed. Edge case: files added to a folder that was itself created after the last plugin planning may need a re-plan (edit any file in the app target).
 
 ## Rules worth knowing
 
 - Every annotated declaration is wired or reported; nothing is skipped silently. All errors from one build are reported together, in a stable order.
 - `@Bean` methods are `static`, have a return type, no generics, and may not `throw` or be `async`; the same goes for selected initializers.
 - Annotated declarations inside `#if` blocks are a build error (the generator can't know which branch compiles). `#if` inside a function body is fine.
-- Unsupported key types: optionals, tuples, functions, `some P`, metatypes, `any A & B`, generic parameters. Wrap them in a named type or provide a protocol.
+- Unsupported key types: optionals, tuples, functions (except as factory parameters), `some P`, metatypes, `any A & B`, generic parameters. Wrap them in a named type or provide a protocol.
 - Keys match by spelling after normalization: `[String: Int]` ≡ `Dictionary<String, Int>`, `any P` ≡ `P`, but a typealias and its underlying type are different keys.
-- Generic `@Service` types, property injection, qualifiers and subcontexts are not supported in v1.
+- Generic `@Service` types, property injection and subcontexts are not supported in v1.
 
 ## Example app
 
-[`Examples/SwiftBeansExample`](Examples/SwiftBeansExample) is a multiplatform SwiftUI app (iOS + macOS) that uses every feature above: `@Configuration` beans for an HTTP client, a protocol-bound repository, transient view models, `@Inject`, `@Assisted`, a local package via `.swiftbeans.yml`, a coordinator over `AppContextProtocol`, and a `FakeAppContext` for Previews and tests. Debug builds use an offline fake HTTP handler; Release builds use `URLSession.shared`.
+[`Examples/SwiftBeansExample`](Examples/SwiftBeansExample) is a multiplatform SwiftUI app (iOS + macOS) that uses every feature above: `@Configuration` beans for an HTTP client, a protocol-bound repository, transient view models, `@Inject`, `@Assisted`, qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`, including two `JSONDecoder`s), collection injection (`[any FeatureNote]`), factories on `AppCoordinator`, a local package via `.swiftbeans.yml`, and a `FakeAppContext` for Previews and tests. Debug builds use an offline fake HTTP handler; Release builds use `URLSession.shared`. The features screen shows the live wiring.
 
 ```bash
 cd Examples/SwiftBeansExample && xcodebuild test -project SwiftBeansExample.xcodeproj -scheme SwiftBeansExample -destination 'platform=macOS' -skipPackagePluginValidation -skipMacroValidation

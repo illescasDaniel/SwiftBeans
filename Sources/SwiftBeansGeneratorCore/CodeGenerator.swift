@@ -8,17 +8,27 @@ enum CodeGenerator {
 			return "\(header)\nimport Foundation\n"
 		}
 
-		var anyKeys = Set<TypeKey>()
+		// `any` follows the type, whatever qualifier it is spelled with.
+		var anyTypes = Set<TypeKey>()
 		for provider in providers {
-			if provider.spelledWithAny { anyKeys.insert(provider.key) }
+			if provider.spelledWithAny { anyTypes.insert(provider.key.type) }
 			for parameter in provider.parameters where parameter.spelledWithAny {
-				if let key = parameter.key { anyKeys.insert(key) }
+				if let key = parameter.key { anyTypes.insert(key.type) }
+			}
+			for case let factory? in provider.parameters.map(\.factory) where factory.returnSpelledWithAny {
+				anyTypes.insert(factory.returnKey)
 			}
 		}
 		// Assisted keys are not injectable, so a defaulted parameter with one keeps its default.
 		let provided = Set(providers.filter { !$0.isAssisted }.map(\.key))
-		func typeName(_ key: TypeKey) -> String {
-			anyKeys.contains(key) ? "any \(key)" : key.description
+		func typeName(_ key: BeanKey) -> String {
+			anyTypes.contains(key.type) ? "any \(key.type)" : key.type.description
+		}
+
+		// Factories resolve against the unqualified provider of the return type.
+		var firstByType: [TypeKey: BeanProvider] = [:]
+		for provider in providers where provider.key.qualifier == nil && firstByType[provider.key.type] == nil {
+			firstByType[provider.key.type] = provider
 		}
 
 		let sorted = providers.sorted { $0.key.accessorName < $1.key.accessorName }
@@ -38,15 +48,29 @@ enum CodeGenerator {
 				? "\tfunc \(provider.key.accessorName)(\(signature(provider))) -> \(typeName(provider.key))"
 				: "\tvar \(provider.key.accessorName): \(typeName(provider.key)) { get }"
 		}
-		let accessors = sorted.map { provider in
+		let injection = ParameterInjection(sorted)
+		let accessors = sorted.indices.map { index in
+			let provider = sorted[index]
 			let arguments = provider.parameters.compactMap { parameter -> String? in
 				let value: String
 				if let assisted = parameter.assisted {
 					value = assisted.internalName
-				} else if let key = parameter.key, provided.contains(key) {
-					value = "self.\(key.accessorName)"
+				} else if let factory = parameter.factory {
+					switch FactoryBinding.resolve(factory, providersByKey: { firstByType[$0] }) {
+					case .deferred(let target), .assisted(let target):
+						value = FactoryBinding.closure(for: target)
+					case .missing, .mismatch:
+						return nil
+					}
 				} else {
-					return nil
+					switch injection.injection(for: parameter, of: index) {
+					case .key(let key) where provided.contains(key):
+						value = "self.\(key.accessorName)"
+					case .collection(let members):
+						value = "[" + members.map { "self.\(sorted[$0].key.accessorName)" }.joined(separator: ", ") + "]"
+					default:
+						return nil
+					}
 				}
 				return parameter.label.map { "\($0): \(value)" } ?? value
 			}.joined(separator: ", ")

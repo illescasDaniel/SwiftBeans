@@ -7,10 +7,11 @@ import SwiftBeans
 final class JSONPlaceholderItemRepository: ItemRepository, Sendable {
 	private let httpClient: any HTTPClient
 	private let baseURL = URL(string: "https://jsonplaceholder.typicode.com")!
-	private let decoder = JSONDecoder()
+	private let decoder: JSONDecoder
 
-	init(httpClient: any HTTPClient) {
+	init(httpClient: any HTTPClient, decoder: JSONDecoder) {
 		self.httpClient = httpClient
+		self.decoder = decoder
 	}
 
 	func fetchItems() async throws -> [Item] {

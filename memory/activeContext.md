@@ -1,23 +1,23 @@
 # Active Context
 
-_Last updated: 2026-10-15_
+_Last updated: 2026-10-16_
 
 ## Branch
 
-- `main`
+- `main` (after merging `feature/improvements` for the 0.2.0 release)
 
 ## Current focus
 
-Review backlog cleared (2026-10-15): example-app fixes, product surface (`SwiftBeansGeneratorCore` no longer a product, `package` access), README written, `.claude` symlinks to `.cursor` skills/rules. All uncommitted; `@Assisted` is committed (`25e0b04`). Verified: `swift test` 133, example macOS tests, iOS Simulator and Release builds.
+Publishing SwiftBeans **0.2.0** (tag + GitHub release).
 
 ## Just changed
 
-- Example: Swift 6 mode, `@State` view models, `LoadState`, throwing `ItemRepository`, `#if DEBUG` fakes and Previews, Release `URLSession.shared`
-- `Package.swift`: products are only `SwiftBeans` + `SwiftBeansPlugin`
-- `README.md` (new)
+- CHANGELOG: Unreleased → `[0.2.0] - 2026-10-16`
+- README install pin: `.upToNextMinor(from: "0.2.0")`
+- Example app graph showcase / preview wiring included in the release commit
 
 ## Next steps
 
-1. Commit this batch when asked
-2. Spec assisted-factory injection (`(Item) -> ItemDetailViewModel`) — Phase 1
-3. Optional: push `main`
+1. Commit remaining work on `feature/improvements`, merge to `main`, tag `0.2.0`, push, `gh release create`
+2. Optional: close draft PRs #1–#7 as superseded by the integration merge
+3. Remaining backlog: child-contexts approval and Phases 2+, nested-`any` array accessor gap

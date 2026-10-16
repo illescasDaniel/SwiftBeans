@@ -83,10 +83,21 @@ package struct GenerationResult: Sendable, Equatable {
 	package var diagnostics: [GeneratorDiagnostic]
 	/// Generated Swift source; `nil` when `diagnostics` contains an error.
 	package var output: String?
+	/// `SwiftBeansGraph.md` contents; `nil` whenever `output` is.
+	package var graphMarkdown: String?
+	/// `SwiftBeansGraph.dot` contents; `nil` whenever `output` is.
+	package var graphDot: String?
 
-	package init(diagnostics: [GeneratorDiagnostic], output: String?) {
+	package init(
+		diagnostics: [GeneratorDiagnostic],
+		output: String?,
+		graphMarkdown: String? = nil,
+		graphDot: String? = nil
+	) {
 		self.diagnostics = diagnostics
 		self.output = output
+		self.graphMarkdown = graphMarkdown
+		self.graphDot = graphDot
 	}
 
 	package var errors: [GeneratorDiagnostic] {
@@ -95,6 +106,41 @@ package struct GenerationResult: Sendable, Equatable {
 }
 
 package enum SwiftBeansGeneration {
+	/// Re-resolves the scan set from disk, then runs `generate(input:)`.
+	///
+	/// Reads `<scanRoot>/<configFileName>` when it exists and walks each listed local package target's
+	/// `Sources/<target>/` folder, so files and config added since the plugin planned the build are included.
+	/// A config problem is reported as an error at the config file (and line), and nothing is generated.
+	package static func generate(request: GeneratorRequest, fileManager: FileManager = .default) -> GenerationResult {
+		let scanRoot = URL(filePath: request.scanRoot, directoryHint: .isDirectory)
+		let configURL = scanRoot.appending(path: request.configFileName)
+		var packages: [LocalPackageTargetSources] = []
+		if fileManager.fileExists(atPath: configURL.path) {
+			do {
+				let configuration = try ScanConfigurationParser.load(contentsOf: configURL)
+				packages = try ScanSetResolver.localPackageSources(
+					for: configuration,
+					configDirectory: scanRoot,
+					fileManager: fileManager
+				)
+			} catch {
+				return GenerationResult(
+					diagnostics: [GeneratorDiagnostic(
+						id: "config.invalid",
+						location: SourcePosition(file: configURL.path, line: error.line ?? 1, column: 1),
+						message: error.message
+					)],
+					output: nil
+				)
+			}
+		}
+		let input = GeneratorInput(
+			targetSources: request.targetSources,
+			localPackages: packages.map { .init(module: $0.module, sources: $0.files.map(\.path)) }
+		)
+		return generate(input: input, fileManager: fileManager)
+	}
+
 	/// Reads every file in `input`, then runs `generate(sources:)`.
 	///
 	/// Paths are de-duplicated after resolving symlinks; a file listed as both a target source and a
@@ -147,6 +193,7 @@ package enum SwiftBeansGeneration {
 
 		let (providers, resolverDiagnostics) = ProviderResolver.resolve(files)
 		diagnostics += resolverDiagnostics
+		diagnostics += DirectCallAnalyzer.analyze(files)
 		// A target without a root context (e.g. a feature module) generates nothing to validate.
 		if contexts.count == 1 {
 			diagnostics += GraphValidator.validate(providers)
@@ -174,7 +221,12 @@ package enum SwiftBeansGeneration {
 			providers: providers,
 			imports: imports
 		)
-		return GenerationResult(diagnostics: diagnostics, output: output)
+		return GenerationResult(
+			diagnostics: diagnostics,
+			output: output,
+			graphMarkdown: GraphDump.markdown(context: contexts.count == 1 ? contexts[0] : nil, providers: providers),
+			graphDot: GraphDump.dot(providers: providers)
+		)
 	}
 }
 

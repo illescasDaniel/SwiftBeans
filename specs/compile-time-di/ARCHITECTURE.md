@@ -36,7 +36,7 @@ flowchart LR
 | `SwiftBeansMacros` | `.macro` | Expand attached macros: local validation (as positioned `Diagnostic`s) + minimal surface (no cross-file discovery) |
 | `SwiftBeansSyntaxRules` | internal library (SwiftSyntax only) | Declaration-local rules shared by macros and generator: attribute recognition (including the non-macro `@Assisted` marker), scope literal, `@Bean` / `@Service` / `@Inject` shape checks. One implementation, so the macro and the generator never disagree |
 | `SwiftBeansGenerator` | executable | Parse the Swift files it is given; build IR graph; emit `SwiftBeansGenerated.swift`; emit diagnostics on failure. **Does not read `.swiftbeans.yml` or search for files.** |
-| `SwiftBeansPlugin` | build tool plugin | Own the scan set: read the build system's file list and `.swiftbeans.yml`, resolve local package sources, declare all of them as inputs, invoke the generator with the explicit file list |
+| `SwiftBeansPlugin` | build tool plugin | Thin: write the request JSON (scan root, target sources from the build system, config file name), declare build inputs (target sources, config, local package files and folders, scan root), invoke the generator with `--request`. Does not decide what is generated |
 | `SwiftBeansGeneratorCore` | internal library (generator + tests) | Graph IR, parser, validator, codegen, diagnostics, and the scan-set resolver source of truth (see [Scan-set resolution](#scan-set-resolution)). Depends on `SwiftBeansSyntaxRules` + SwiftSyntax, **not on `SwiftBeans`** (scope is parsed into the rules module's own `ScopeLiteral`). **Not a product** (see [Product surface](#product-surface)); its entry points use `package` access |
 | `SwiftBeansTests` | tests | BDD scenarios against fixtures that apply the plugin (Phase 3+) |
 | `SwiftBeansMacrosTests` | tests | Macro expansion unit tests via SwiftSyntax |
@@ -373,6 +373,7 @@ struct AssistedArgument {
 - **Memberwise** parameters: stored `let`/`var` without accessors, not `static`/`lazy`, in declaration order; `let x = …` excluded; `var x: T = …` → `hasDefault`. A stored property with an attribute (property wrapper) and no declared init → diagnostic.
 - **Defaulted parameter of type `T?`** is looked up as `T`.
 - **Assisted parameters** (`ParameterInfo.isAssisted`) get `assisted = AssistedArgument(label:internalName:typeSpelling:)` and `key = nil`. The resolver does no key normalization for them, so the key restrictions (optionals, tuples, functions…) produce no `key.unsupported` error. If the provider has any assisted parameter, `BeanProvider.scope` is forced to `.transient`.
+- **Factory parameters** (`ParameterInfo.factory`, a function-typed dependency): `BeanParameter.factory` carries the parsed `FactoryType` and `key` is `nil`. `FactoryBinding.resolve` matches it against the provider of its return key (deferred / assisted / missing / mismatch); `GraphValidator` reports mismatches and skips factory parameters in cycle detection; `CodeGenerator` emits the closure. See `specs/factory-injection/SPEC.md`.
 - **Assisted diagnostics** (errors, from the resolver, only for the *selected* initializer / `@Bean` method; assisted parameters elsewhere have no effect, SPEC rule 8):
 
   | id | Location | When |
@@ -536,9 +537,9 @@ Revised 2026-10-15 for SPEC → *Source discovery*.
 | Step | Owner |
 |------|-------|
 | List target sources | Plugin — SPM: `SourceModuleTarget.sourceFiles(withSuffix: "swift")`; Xcode: `XcodeTarget.inputFiles` filtered to `.source` + `.swift` |
-| Locate `.swiftbeans.yml` | Plugin — scan root only (see above) |
-| Parse config + resolve local package sources | Plugin, via the shared resolver |
-| Declare build inputs | Plugin — target sources ∪ local package sources ∪ config file (when present) |
+| Write the request (scan root, target sources, config name) | Plugin |
+| Locate + parse `.swiftbeans.yml`, resolve local package sources, build `GeneratorInput` | Generator (`SwiftBeansGeneration.generate(request:)`), on every run |
+| Declare build inputs (cause reruns) | Plugin — target sources ∪ request JSON ∪ scan root ∪ config file ∪ local package files ∪ their folders, from a best-effort plan-time resolution |
 | Parse sources, validate graph, write output | Generator |
 
 No folder walking of the target, no source-root inference, no file-name markers. `expandedSwiftSources`, `inferSourceRoot`, `findConfig` (plugin) and `findConfiguration` / `--config` (generator) are deleted.
@@ -548,13 +549,16 @@ No folder walking of the target, no source-root inference, no file-name markers.
 ### Generator CLI
 
 ```
-SwiftBeansGenerator --output <file> --input <generator-input.json>
-SwiftBeansGenerator --output <file> <source.swift>...      # debugging: all files are target sources
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --request <generator-request.json>   # plugin
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] --input <generator-input.json>        # explicit file lists
+SwiftBeansGenerator --output <file> [--graph-markdown <file>] [--graph-dot <file>] <source.swift>...      # debugging: all files are target sources
 ```
 
-- The plugin writes `GeneratorInput` as JSON to `<pluginWorkDirectory>/SwiftBeansInput.json` (only when its bytes change) and passes `--input`. This replaces one argument per file, which could exceed the OS argument-length limit on large apps, and carries each local package file's module.
-- The JSON file is a declared input too, so a re-planned file list reruns the generator.
-- `GeneratorInput` is declared in the shared `ScanSetResolution.swift` (public, Foundation-only), so the plugin's encoder and the generator's decoder are the same code, kept identical by the drift guard. `SwiftBeansGeneratorCore` re-exposes it from there.
+- `--graph-markdown` / `--graph-dot` write the resolved-graph dumps (`GraphDump` in `SwiftBeansGeneratorCore`; `specs/graph-dump/SPEC.md`). They are written only on success, with the same write-if-changed rule as `--output`.
+- The plugin writes `GeneratorRequest` as JSON (`scanRoot`, `targetSources`, `configFileName`) to `<pluginWorkDirectory>/SwiftBeansRequest.json` (only when its bytes change) and passes `--request` plus the graph paths. One JSON file replaces one argument per source, which could exceed the OS argument-length limit on large apps.
+- `SwiftBeansGeneration.generate(request:)` (GeneratorCore, unit-tested) reads `<scanRoot>/<configFileName>` if it exists, resolves local packages with `ScanSetResolver`, builds a `GeneratorInput` from the *current* disk state, and calls `generate(input:)`. A config error becomes an error diagnostic (`config.invalid`) at the config file and line; nothing is generated.
+- `GeneratorRequest` and `GeneratorInput` are declared in the shared `ScanSetResolution.swift` (public, Foundation-only), so the plugin's encoder and the generator's decoder are the same code, kept identical by the drift guard. `SwiftBeansGeneratorCore` re-exposes them from there.
+- The generator creates the output file's folder if needed and writes through `GeneratedFileWriter`, which leaves identical bytes untouched, so an unchanged graph keeps Swift compilation incremental.
 - Local package module name = the target name with characters that are not valid in a Swift identifier replaced by `_` (SwiftPM's `c99name`).
 - Sources are de-duplicated by resolved path and sorted (SPEC rule 6). A path listed both as a target source and a package source counts as a target source.
 - Every diagnostic is printed to stderr as its `rendered` form. Exit code is 1 if any error was reported, else 0. Warnings alone do not fail.
@@ -603,15 +607,17 @@ Symlinks were rejected because the example already relies on them and they break
 
 ### Errors
 
-On a `ScanConfigurationError` the plugin emits `Diagnostics.error(message, file: <config path>, line:)` and returns no build commands, so the build fails with a clickable diagnostic on the config entry. It does not also rethrow (that duplicates the message). It never skips an entry silently.
+Config problems are reported by the generator, not the plugin: it prints `<config>:<line>:1: error: ...` to stderr and exits 1, so the build fails with a clickable diagnostic on the config entry. The plugin's plan-time resolution (used only to choose inputs) ignores config errors and declares the config file and scan root, so fixing the file reruns the generator. Nothing is skipped silently.
 
 ### Plugin shape
 
-`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that resolves the config, writes `SwiftBeansInput.json`, and returns the single `.buildCommand` (`--output`, `--input`; inputs = target sources ∪ package sources ∪ config ∪ input JSON).
+`createBuildCommands` (SPM) and the `XcodeBuildToolPlugin` variant differ only in how they obtain `(sourceFiles, scanRoot, targetName)`; both call one shared `makeCommands(...)` that writes `SwiftBeansRequest.json` and returns the single `.buildCommand` (`--output`, `--graph-markdown`, `--graph-dot`, `--request`; inputs = target sources ∪ request JSON ∪ scan root ∪ config ∪ package files ∪ package folders; declared output = `SwiftBeansGenerated.swift` only, the graph files are written beside it undeclared so SwiftPM does not bundle them as resources).
 
-### Known limitation
+**Why not a prebuild command.** A prebuild command runs every build and is the natural fit for "re-resolve each time", but SwiftPM rejects it for executables built from source (`a prebuild command cannot use executables built from source, including executable target 'SwiftBeansGenerator'`, verified with Swift 6.5-dev, both build systems); only binary targets or system tools are allowed. A binary-target generator would need a prebuilt artifact bundle per release. So the generator remains a build command, but all scan decisions moved into it, and folders are declared as inputs so the build system reruns it when files are added or removed.
 
-Neither SPM nor Xcode re-plans plugins when an *undeclared* file appears, so a new `.swift` file in a local package (or a newly created `.swiftbeans.yml`) may need a re-plan / clean build to join the graph (SPEC → Known limitations).
+### Known limitations
+
+Inputs come from the plan-time resolution, so a file added inside a folder that did not exist at plan time, or an edit to an existing file of a package added to the config since planning, may not rerun the generator until the plugin is planned again (SPEC → Known limitations). Verified with SwiftPM 6.5-dev: new files in existing and nested folders, a new subfolder, and a config created or edited later all regenerate without a clean build. Xcode was not verifiable in this environment.
 
 ## Testing seams
 

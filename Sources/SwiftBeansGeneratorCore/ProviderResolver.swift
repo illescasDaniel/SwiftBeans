@@ -9,7 +9,7 @@ struct BeanProvider {
 		case staticMethod(typeName: String, name: String)
 	}
 
-	var key: TypeKey
+	var key: BeanKey
 	var spelledWithAny: Bool
 	var scope: ScopeLiteral
 	var origin: SourceFile.Origin
@@ -19,6 +19,8 @@ struct BeanProvider {
 	var displayName: String
 	var construction: Construction
 	var parameters: [BeanParameter]
+	/// Keys the type named by `key` declares in scanned inheritance clauses, transitively; it can join `[K]` for each.
+	var conformances: Set<TypeKey>
 
 	/// True when any parameter is `@Assisted`: the accessor is a method, not a property.
 	var isAssisted: Bool {
@@ -30,12 +32,16 @@ struct BeanParameter {
 	/// `nil` for `_`.
 	var label: String?
 	/// `nil` when the parameter can only take its default (unsupported or unwritten type), and always for an assisted one.
-	var key: TypeKey?
+	var key: BeanKey?
 	var spelledWithAny: Bool
+	/// `[any P]`: with no array bean and no members, the parameter gets `[]`.
+	var elementSpelledWithAny: Bool
 	var hasDefault: Bool
 	var location: SourcePosition
 	/// Non-nil for an `@Assisted` parameter.
 	var assisted: AssistedArgument?
+	/// Non-nil for a function-typed parameter that can be a factory; `key` is `nil` then.
+	var factory: FactoryType?
 }
 
 /// A runtime argument of an assisted provider's method accessor.
@@ -46,6 +52,8 @@ struct AssistedArgument {
 	var internalName: String
 	/// As written in the source.
 	var typeSpelling: String
+	/// For matching against a factory's parameter types.
+	var canonicalType: String
 }
 
 /// Builds providers from scanned declarations, matching extensions and initializers across files.
@@ -56,6 +64,8 @@ struct ProviderResolver {
 	private let types: [String: TypeDecl]
 	private let configurationNames: Set<String>
 	private let extensionInitializers: [String: [InitializerInfo]]
+	/// Inheritance clauses of every scanned type and extension, by qualified type name.
+	private let inheritedTypes: [String: [TypeKey]]
 
 	static func resolve(_ files: [ScannedFile]) -> (providers: [BeanProvider], diagnostics: [GeneratorDiagnostic]) {
 		var resolver = ProviderResolver(files)
@@ -65,6 +75,9 @@ struct ProviderResolver {
 			}
 			for location in file.assistedPropertyLocations {
 				resolver.error("assisted.property", at: location, "@Assisted can only be applied to parameters, not stored properties")
+			}
+			for location in file.qualifierPropertyLocations {
+				resolver.error("qualifier.property", at: location, "@Qualifier can only be applied to parameters, not stored properties")
 			}
 			for service in file.services {
 				resolver.resolve(service, origin: file.source.origin)
@@ -79,16 +92,22 @@ struct ProviderResolver {
 	private init(_ files: [ScannedFile]) {
 		var types: [String: TypeDecl] = [:]
 		var extensionInitializers: [String: [InitializerInfo]] = [:]
+		var inheritedTypes: [String: [TypeKey]] = [:]
 		for file in files {
-			for type in file.types where types[type.name] == nil {
-				types[type.name] = type
+			for type in file.types {
+				if types[type.name] == nil {
+					types[type.name] = type
+				}
+				inheritedTypes[type.name, default: []] += type.inheritedTypes
 			}
 			for extensionDecl in file.extensions {
 				extensionInitializers[extensionDecl.extendedName, default: []] += extensionDecl.initializers
+				inheritedTypes[extensionDecl.extendedName, default: []] += extensionDecl.inheritedTypes
 			}
 		}
 		self.types = types
 		self.extensionInitializers = extensionInitializers
+		self.inheritedTypes = inheritedTypes
 		configurationNames = Set(files.flatMap(\.types).filter(\.isConfiguration).map(\.name))
 	}
 
@@ -149,14 +168,15 @@ struct ProviderResolver {
 
 		let resolved = resolveParameters(parameters)
 		providers.append(BeanProvider(
-			key: normalized.key,
+			key: BeanKey(normalized.key, qualifier: service.qualifier),
 			spelledWithAny: normalized.spelledWithAny,
 			scope: scope(service.scope, scopeLocation: service.scopeLocation, parameters: resolved),
 			origin: origin,
 			location: service.location,
 			displayName: type.name,
 			construction: .initializer(typeName: type.name),
-			parameters: resolved
+			parameters: resolved,
+			conformances: conformances(of: normalized.key)
 		))
 	}
 
@@ -211,18 +231,33 @@ struct ProviderResolver {
 		}
 		let resolved = resolveParameters(bean.parameters)
 		providers.append(BeanProvider(
-			key: normalized.key,
+			key: BeanKey(normalized.key, qualifier: bean.qualifier),
 			spelledWithAny: normalized.spelledWithAny,
 			scope: scope(bean.scope, scopeLocation: bean.scopeLocation, parameters: resolved),
 			origin: origin,
 			location: bean.location,
 			displayName: displayName,
 			construction: .staticMethod(typeName: bean.enclosingName, name: bean.name),
-			parameters: resolved
+			parameters: resolved,
+			conformances: conformances(of: normalized.key)
 		))
 	}
 
 	// MARK: - Helpers
+
+	/// Walks inheritance clauses from the declaration named by `key` (`Sub: Base`, `Base: P` → `Base`, `P`).
+	/// Matching is by spelling, like keys; types declared outside the scan set contribute nothing.
+	private func conformances(of key: TypeKey) -> Set<TypeKey> {
+		var found = Set<TypeKey>()
+		var pending = [key]
+		while let next = pending.popLast() {
+			guard case .nominal = next else { continue }
+			for inherited in inheritedTypes[next.description] ?? [] where inherited != key && found.insert(inherited).inserted {
+				pending.append(inherited)
+			}
+		}
+		return found
+	}
 
 	/// An assisted provider constructs a new instance per call, so it is always transient;
 	/// an explicit `.singleton` is an error at the `scope:` argument.
@@ -238,6 +273,33 @@ struct ProviderResolver {
 	/// Assisted parameters are runtime arguments, not keys: their types are not normalized.
 	private mutating func resolveParameters(_ parameters: [ParameterInfo]) -> [BeanParameter] {
 		parameters.map { parameter in
+			var qualifier: String?
+			if let use = parameter.qualifier {
+				if parameter.isAssisted {
+					error(
+						"qualifier.assisted",
+						at: use.location,
+						"@Qualifier cannot be combined with @Assisted; runtime arguments are not looked up in the graph"
+					)
+				} else {
+					switch use.name {
+					case .success(let name):
+						qualifier = name
+					case .failure(let violation):
+						error(violation.id, at: violation.location, violation.message)
+						return BeanParameter(
+							label: parameter.label,
+							key: nil,
+							spelledWithAny: false,
+							elementSpelledWithAny: false,
+							hasDefault: parameter.hasDefault,
+							location: parameter.location,
+							assisted: nil,
+							factory: nil
+						)
+					}
+				}
+			}
 			if parameter.isAssisted {
 				if let defaultLocation = parameter.defaultLocation {
 					error("assisted.default", at: defaultLocation, "@Assisted parameters cannot have a default value")
@@ -252,20 +314,44 @@ struct ProviderResolver {
 					label: parameter.label,
 					key: nil,
 					spelledWithAny: false,
+					elementSpelledWithAny: false,
 					hasDefault: parameter.hasDefault,
 					location: parameter.location,
 					assisted: AssistedArgument(
 						label: parameter.label,
 						internalName: parameter.internalName,
-						typeSpelling: parameter.typeSpelling
-					)
+						typeSpelling: parameter.typeSpelling,
+						canonicalType: parameter.canonicalType
+					),
+					factory: nil
 				)
 			}
-			var key: TypeKey?
+			if let factory = parameter.factory {
+				var resolved: FactoryType?
+				switch factory {
+				case .success(let value):
+					resolved = value
+				case .failure(let unsupported) where !parameter.hasDefault:
+					error("factory.unsupported", at: parameter.typeLocation, "cannot inject '\(parameter.typeSpelling)': \(unsupported)")
+				case .failure:
+					break
+				}
+				return BeanParameter(
+					label: parameter.label,
+					key: nil,
+					spelledWithAny: false,
+					elementSpelledWithAny: false,
+					hasDefault: parameter.hasDefault,
+					location: parameter.location,
+					assisted: nil,
+					factory: resolved
+				)
+			}
+			var key: BeanKey?
 			var spelledWithAny = false
 			switch parameter.key {
 			case .success(let normalized):
-				key = normalized.key
+				key = BeanKey(normalized.key, qualifier: qualifier)
 				spelledWithAny = normalized.spelledWithAny
 			case .failure(let unsupported) where !parameter.hasDefault:
 				error("key.unsupported", at: parameter.typeLocation, "cannot inject '\(parameter.typeSpelling)': \(unsupported)")
@@ -276,9 +362,11 @@ struct ProviderResolver {
 				label: parameter.label,
 				key: key,
 				spelledWithAny: spelledWithAny,
+				elementSpelledWithAny: parameter.elementSpelledWithAny,
 				hasDefault: parameter.hasDefault,
 				location: parameter.location,
-				assisted: nil
+				assisted: nil,
+				factory: nil
 			)
 		}
 	}

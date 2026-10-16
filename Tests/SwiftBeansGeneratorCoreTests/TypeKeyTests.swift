@@ -50,6 +50,20 @@ struct TypeKeyTests {
 	}
 
 	@Test(arguments: [
+		("[any Store]", true),
+		("[(any Store)]", true),
+		("Array<any Store>", true),
+		("([any Store])", true),
+		("[Store]", false),
+		("any Store", false),
+		("[[any Store]]", false),
+		("[String: any Store]", false),
+	])
+	func `Given a spelling When checked Then any is recorded for an array element`(spelling: String, elementSpelledWithAny: Bool) {
+		#expect(KeyNormalization.elementSpelledWithAny(forSpelling: spelling) == elementSpelledWithAny)
+	}
+
+	@Test(arguments: [
 		("Logger?", UnsupportedKey.Reason.optional),
 		("Optional<Logger>", .optional),
 		("Logger!", .implicitlyUnwrappedOptional),
@@ -95,5 +109,47 @@ struct TypeKeyTests {
 		accessor: String
 	) throws {
 		#expect(try KeyNormalization.key(forSpelling: spelling).get().key.accessorName == accessor)
+	}
+
+	@Test(arguments: [
+		("JSONDecoder", nil, "jsonDecoder"),
+		("JSONDecoder", "snakeCase", "snakeCaseJSONDecoder"),
+		("JSONDecoder", "SnakeCase", "snakeCaseJSONDecoder"),
+		("URLSession", "public", "publicURLSession"),
+		("Session", "URL", "urlSession"),
+		("any Store", "primary", "primaryStore"),
+		("[User]", "cached", "cachedUserArray"),
+		("Cache<User>", "hot", "hotUserCache"),
+		("Outer.Inner", "_test", "_testOuterInner"),
+	] as [(String, String?, String)])
+	func `Given a qualified key When naming its accessor Then the qualifier prefixes the type pieces`(
+		spelling: String,
+		qualifier: String?,
+		accessor: String
+	) throws {
+		let key = BeanKey(try KeyNormalization.key(forSpelling: spelling).get().key, qualifier: qualifier)
+		#expect(key.accessorName == accessor)
+		#expect(key.registryKey == accessor)
+	}
+
+	@Test
+	func `Given bean keys When compared Then they order by type then unqualified first then name`() throws {
+		let decoder = try KeyNormalization.key(forSpelling: "JSONDecoder").get().key
+		let encoder = try KeyNormalization.key(forSpelling: "JSONEncoder").get().key
+		let keys = [
+			BeanKey(encoder),
+			BeanKey(decoder, qualifier: "snakeCase"),
+			BeanKey(decoder),
+			BeanKey(decoder, qualifier: "camelCase"),
+		]
+		#expect(keys.sorted().map(\.description) == [
+			"JSONDecoder",
+			#"JSONDecoder named "camelCase""#,
+			#"JSONDecoder named "snakeCase""#,
+			"JSONEncoder",
+		])
+		#expect(BeanKey(decoder) != BeanKey(decoder, qualifier: "snakeCase"))
+		#expect(BeanKey(decoder, qualifier: "snakeCase").quoted == #"'JSONDecoder' named "snakeCase""#)
+		#expect(BeanKey(decoder).quoted == "'JSONDecoder'")
 	}
 }

@@ -14,7 +14,25 @@ struct ScannedFile {
 	var conditionalDecls: [SourcePosition] = []
 	/// `@Assisted` on stored properties of scanned types (parameters only; SPEC Assisted providers, rule 7).
 	var assistedPropertyLocations: [SourcePosition] = []
+	/// `@Qualifier` on stored properties of scanned types (parameters only; qualifiers SPEC).
+	var qualifierPropertyLocations: [SourcePosition] = []
 	var imports: [ImportRecord] = []
+	/// Initializer bodies of every scanned type (and extension), for the inter-bean call diagnostic.
+	var initializerBodies: [InitializerBody] = []
+}
+
+/// A call written as `name(...)` or `base.name(...)`.
+struct CallSite {
+	/// The spelled base (`AppConfiguration`, `Self`), `nil` for a bare call.
+	var base: String?
+	var name: String
+	var location: SourcePosition
+}
+
+struct InitializerBody {
+	/// Qualified name of the declaring (or extended) type.
+	var typeName: String
+	var calls: [CallSite]
 }
 
 struct ContextDecl {
@@ -45,11 +63,14 @@ struct TypeDecl {
 	/// A stored property carries an attribute (property wrapper) — no usable memberwise init.
 	var hasWrappedProperty: Bool
 	var location: SourcePosition
+	/// Supported keys in the inheritance clause (superclass, protocols), for collection membership.
+	var inheritedTypes: [TypeKey]
 }
 
 struct ExtensionDecl {
 	var extendedName: String
 	var initializers: [InitializerInfo]
+	var inheritedTypes: [TypeKey]
 }
 
 struct InitializerInfo {
@@ -74,9 +95,17 @@ struct ParameterInfo {
 	var typeLocation: SourcePosition
 	/// `nil` when the type is not written (`var retries = 3`). For a defaulted optional, the wrapped type's key.
 	var key: Result<KeyNormalization.Normalized, UnsupportedKey>?
+	/// `[any P]`: an empty collection is a valid injection.
+	var elementSpelledWithAny: Bool
 	var typeSpelling: String
+	/// `KeyNormalization.canonicalSpelling` of the type, to match assisted arguments against factory parameters.
+	var canonicalType: String
+	/// Non-nil when the type is a function type (a factory request).
+	var factory: Result<FactoryType, UnsupportedFactory>?
 	/// `@Assisted` / `@SwiftBeans.Assisted`.
 	var isAssisted: Bool
+	/// `@Qualifier(…)` / `@SwiftBeans.Qualifier(…)`.
+	var qualifier: QualifierUse?
 	/// `T...`
 	var isVariadic: Bool
 	/// `inout T`
@@ -85,9 +114,25 @@ struct ParameterInfo {
 	var defaultLocation: SourcePosition?
 }
 
+/// A `@Qualifier` attribute on a parameter.
+struct QualifierUse {
+	/// The attribute.
+	var location: SourcePosition
+	var name: Result<String, LocatedViolation>
+}
+
+/// A `SwiftBeansSyntaxRules.Violation` the generator reports itself, at a scanned position.
+struct LocatedViolation: Error {
+	var id: String
+	var message: String
+	var location: SourcePosition
+}
+
 struct ServiceDecl {
 	var typeName: String
 	var scope: ScopeLiteral
+	/// `named:`
+	var qualifier: String?
 	/// The `scope:` argument; non-nil only when a literal scope is written explicitly.
 	var scopeLocation: SourcePosition?
 	/// `boundTo:` key, when present.
@@ -100,6 +145,8 @@ struct BeanDecl {
 	var enclosingName: String
 	var name: String
 	var scope: ScopeLiteral
+	/// `named:`
+	var qualifier: String?
 	/// The `scope:` argument; non-nil only when a literal scope is written explicitly.
 	var scopeLocation: SourcePosition?
 	var isPublic: Bool
@@ -108,6 +155,8 @@ struct BeanDecl {
 	var returnTypeLocation: SourcePosition
 	var returnSpelling: String
 	var location: SourcePosition
+	/// Calls in the function body, for the inter-bean call diagnostic.
+	var bodyCalls: [CallSite]
 }
 
 struct ImportRecord: Hashable {
@@ -193,8 +242,10 @@ struct DeclarationScanner {
 			let name = extensionDecl.extendedType.trimmedDescription
 			result.extensions.append(ExtensionDecl(
 				extendedName: name,
-				initializers: initializers(in: extensionDecl.memberBlock.members)
+				initializers: initializers(in: extensionDecl.memberBlock.members),
+				inheritedTypes: inheritedTypes(extensionDecl.inheritanceClause)
 			))
+			recordInitializerBodies(extensionDecl.memberBlock.members, typeName: name)
 			let isPublic = extensionDecl.modifiers.contains { isPublicModifier($0) }
 			walkMembers(extensionDecl.memberBlock.members, enclosing: .extension(name, isPublic: isPublic), conditional: conditional)
 		} else if let function = decl.as(FunctionDeclSyntax.self),
@@ -249,27 +300,33 @@ struct DeclarationScanner {
 			initializers: initializers(in: members),
 			memberwise: memberwise,
 			hasWrappedProperty: hasWrappedProperty,
-			location: location
+			location: location,
+			inheritedTypes: inheritedTypes(group.inheritanceClause)
 		))
-		recordAssistedProperties(members)
+		recordMarkerProperties(members)
+		recordInitializerBodies(members, typeName: name)
 		walkMembers(members, enclosing: .type(name), conditional: conditional)
 	}
 
-	/// `@Assisted` belongs on parameters; on a stored property it is an error.
-	private mutating func recordAssistedProperties(_ members: MemberBlockItemListSyntax) {
+	/// `@Assisted` and `@Qualifier` belong on parameters; on a stored property they are errors.
+	private mutating func recordMarkerProperties(_ members: MemberBlockItemListSyntax) {
 		for member in members {
 			guard let variable = member.decl.as(VariableDeclSyntax.self),
 			      variable.bindings.contains(where: { isStored($0) })
 			else { continue }
-			for case .attribute(let attribute) in variable.attributes where SwiftBeansSyntaxRules.isAssisted(attribute) {
-				result.assistedPropertyLocations.append(position(attribute))
+			for case .attribute(let attribute) in variable.attributes {
+				if SwiftBeansSyntaxRules.isAssisted(attribute) {
+					result.assistedPropertyLocations.append(position(attribute))
+				} else if SwiftBeansSyntaxRules.isQualifier(attribute) {
+					result.qualifierPropertyLocations.append(position(attribute))
+				}
 			}
 		}
 	}
 
 	private mutating func recordService(_ decl: DeclSyntax, attribute: AttributeSyntax, typeName: String, location: SourcePosition) {
-		// Wrong kind and generic types are the macro's errors; they cannot be wired.
-		let skipped: Set<String> = ["service.wrongKind", "service.generic"]
+		// Wrong kind, generic types and bad names are the macro's errors; they cannot be wired.
+		let skipped: Set<String> = ["service.wrongKind", "service.generic", "qualifier.notLiteral", "qualifier.invalidName"]
 		guard !SwiftBeansSyntaxRules.serviceViolations(decl, attribute: attribute).contains(where: { skipped.contains($0.id) }) else {
 			return
 		}
@@ -289,6 +346,7 @@ struct DeclarationScanner {
 		result.services.append(ServiceDecl(
 			typeName: typeName,
 			scope: (try? SwiftBeansSyntaxRules.scope(of: attribute).get()) ?? .singleton,
+			qualifier: try? SwiftBeansSyntaxRules.named(of: attribute).get(),
 			scopeLocation: scopeLocation(of: attribute),
 			boundTo: boundTo,
 			location: location
@@ -296,8 +354,8 @@ struct DeclarationScanner {
 	}
 
 	private mutating func visitBean(_ function: FunctionDeclSyntax, attribute: AttributeSyntax, enclosing: Enclosing) {
-		// Without a return type or with generic parameters there is no key; the macro reports it.
-		let skipped: Set<String> = ["bean.noReturnType", "bean.generic"]
+		// Without a return type, with generic parameters or a bad name there is no key; the macro reports it.
+		let skipped: Set<String> = ["bean.noReturnType", "bean.generic", "qualifier.notLiteral", "qualifier.invalidName"]
 		guard !SwiftBeansSyntaxRules.beanViolations(function, attribute: attribute).contains(where: { skipped.contains($0.id) }),
 		      let returnType = function.signature.returnClause?.type
 		else {
@@ -313,14 +371,41 @@ struct DeclarationScanner {
 			enclosingName: enclosing.name,
 			name: function.name.text,
 			scope: (try? SwiftBeansSyntaxRules.scope(of: attribute).get()) ?? .singleton,
+			qualifier: try? SwiftBeansSyntaxRules.named(of: attribute).get(),
 			scopeLocation: scopeLocation(of: attribute),
 			isPublic: isPublic,
 			parameters: parameters(function.signature.parameterClause.parameters),
 			returnKey: KeyNormalization.key(for: returnType),
 			returnTypeLocation: position(returnType),
 			returnSpelling: returnType.trimmedDescription,
-			location: position(function)
+			location: position(function),
+			bodyCalls: function.body.map(calls(in:)) ?? []
 		))
+	}
+
+	private mutating func recordInitializerBodies(_ members: MemberBlockItemListSyntax, typeName: String) {
+		for member in members {
+			guard let initializer = member.decl.as(InitializerDeclSyntax.self), let body = initializer.body else { continue }
+			let calls = calls(in: body)
+			if !calls.isEmpty {
+				result.initializerBodies.append(InitializerBody(typeName: typeName, calls: calls))
+			}
+		}
+	}
+
+	private func calls(in body: CodeBlockSyntax) -> [CallSite] {
+		let collector = CallCollector(viewMode: .sourceAccurate)
+		collector.walk(body)
+		return collector.calls.compactMap { call in
+			let location = position(call)
+			if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+				return CallSite(base: nil, name: reference.baseName.text, location: location)
+			}
+			if let member = call.calledExpression.as(MemberAccessExprSyntax.self), let base = member.base {
+				return CallSite(base: base.trimmedDescription, name: member.declName.baseName.text, location: location)
+			}
+			return nil
+		}
 	}
 
 	/// The `scope:` argument, when it is a supported literal (a non-literal one is the macro's error).
@@ -365,9 +450,13 @@ struct DeclarationScanner {
 				hasDefault: hasDefault,
 				location: position(parameter),
 				typeLocation: position(parameter.type),
-				key: key(for: parameter.type, hasDefault: hasDefault),
+				key: KeyNormalization.key(for: keyType(parameter.type, hasDefault: hasDefault)),
+				elementSpelledWithAny: KeyNormalization.elementSpelledWithAny(keyType(parameter.type, hasDefault: hasDefault)),
 				typeSpelling: parameter.type.trimmedDescription,
+				canonicalType: KeyNormalization.canonicalSpelling(of: parameter.type),
+				factory: FactoryNormalization.factory(for: parameter.type),
 				isAssisted: SwiftBeansSyntaxRules.isAssisted(parameter),
+				qualifier: SwiftBeansSyntaxRules.qualifierAttribute(in: parameter.attributes).map(qualifierUse),
 				isVariadic: parameter.ellipsis != nil,
 				isInout: isInout,
 				defaultLocation: parameter.defaultValue.map { position($0.value) }
@@ -385,9 +474,11 @@ struct DeclarationScanner {
 			if modifiers.contains(.keyword(.static)) || modifiers.contains(.keyword(.class)) || modifiers.contains(.keyword(.lazy)) {
 				continue
 			}
-			// `@Assisted` on a property is reported by `recordAssistedProperties`; it is not a parameter.
+			// `@Assisted` / `@Qualifier` on a property is reported by `recordMarkerProperties`; it is not a parameter.
 			if variable.attributes.contains(where: { element in
-				if case .attribute(let attribute) = element { return SwiftBeansSyntaxRules.isAssisted(attribute) }
+				if case .attribute(let attribute) = element {
+					return SwiftBeansSyntaxRules.isAssisted(attribute) || SwiftBeansSyntaxRules.isQualifier(attribute)
+				}
 				return false
 			}) {
 				continue
@@ -409,9 +500,13 @@ struct DeclarationScanner {
 					hasDefault: hasDefault,
 					location: position(binding),
 					typeLocation: type.map { position($0) } ?? position(binding),
-					key: type.map { key(for: $0, hasDefault: hasDefault) },
+					key: type.map { KeyNormalization.key(for: keyType($0, hasDefault: hasDefault)) },
+					elementSpelledWithAny: type.map { KeyNormalization.elementSpelledWithAny(keyType($0, hasDefault: hasDefault)) } ?? false,
 					typeSpelling: type?.trimmedDescription ?? "",
+					canonicalType: type.map { KeyNormalization.canonicalSpelling(of: $0) } ?? "",
+					factory: type.flatMap { FactoryNormalization.factory(for: $0) },
 					isAssisted: false,
+					qualifier: nil,
 					isVariadic: false,
 					isInout: false,
 					defaultLocation: binding.initializer.map { position($0.value) }
@@ -421,12 +516,26 @@ struct DeclarationScanner {
 		return (parameters, hasWrappedProperty)
 	}
 
+	private func qualifierUse(_ attribute: AttributeSyntax) -> QualifierUse {
+		QualifierUse(
+			location: position(attribute),
+			name: SwiftBeansSyntaxRules.qualifierName(of: attribute).mapError { violation in
+				LocatedViolation(id: violation.id, message: violation.message, location: position(violation.node))
+			}
+		)
+	}
+
 	/// A defaulted `T?` parameter is looked up as `T`.
-	private func key(for type: TypeSyntax, hasDefault: Bool) -> Result<KeyNormalization.Normalized, UnsupportedKey> {
+	private func keyType(_ type: TypeSyntax, hasDefault: Bool) -> TypeSyntax {
 		if hasDefault, let wrapped = KeyNormalization.optionalWrapped(type) {
-			return KeyNormalization.key(for: wrapped)
+			return wrapped
 		}
-		return KeyNormalization.key(for: type)
+		return type
+	}
+
+	/// Entries that are not valid keys (e.g. compositions) can never match a collection element, so they are dropped.
+	private func inheritedTypes(_ clause: InheritanceClauseSyntax?) -> [TypeKey] {
+		clause?.inheritedTypes.compactMap { try? KeyNormalization.key(for: $0.type).get().key } ?? []
 	}
 
 	/// No accessor block, or only `willSet` / `didSet` observers.
@@ -516,4 +625,20 @@ struct ConditionTerm {
 		if terms.count == 1, !terms[0].negated { return terms[0].expression }
 		return terms.map { $0.negated ? "!(\($0.expression))" : "(\($0.expression))" }.joined(separator: " && ")
 	}
+}
+
+/// Collects call expressions, without entering nested type declarations.
+private final class CallCollector: SyntaxVisitor {
+	private(set) var calls: [FunctionCallExprSyntax] = []
+
+	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+		calls.append(node)
+		return .visitChildren
+	}
+
+	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
 }
