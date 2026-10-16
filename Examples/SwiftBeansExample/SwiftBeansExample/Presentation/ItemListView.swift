@@ -55,7 +55,7 @@ struct ItemListView: View {
 			}
 
 			Section("Explore") {
-				Button("HTTIES + @Bean demo") {
+				Button("SwiftBeans features") {
 					coordinator.push(.featuresDemo)
 				}
 			}
@@ -78,10 +78,8 @@ struct ItemListView: View {
 #if DEBUG
 #Preview("ItemListView") {
 	let context = FakeAppContext()
-	let coordinator = context.appCoordinator
-	NavigationStack {
+	PreviewRootView(coordinator: context.appCoordinator) {
 		ItemListView(viewModel: context.itemListViewModel)
 	}
-	.environment(coordinator)
 }
 #endif

@@ -106,7 +106,7 @@ struct SwiftBeansGeneratorMain {
 		}
 	}
 
-	/// `stderr` is not concurrency-safe to reference on Linux (Swift 6 mode).
+	/// `FileHandle` instead of `fputs(_:stderr)`: Glibc's `stderr` is a mutable global that Swift 6 rejects.
 	private static func printError(_ message: String) {
 		FileHandle.standardError.write(Data((message + "\n").utf8))
 	}
@@ -114,10 +114,5 @@ struct SwiftBeansGeneratorMain {
 	private static func fail(_ message: String) -> Never {
 		printError("error: \(message)")
 		exit(1)
-	}
-
-	/// `FileHandle` instead of `fputs(_:stderr)`: Glibc's `stderr` is a mutable global that Swift 6 rejects.
-	private static func printError(_ line: String) {
-		FileHandle.standardError.write(Data("\(line)\n".utf8))
 	}
 }

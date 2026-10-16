@@ -1,3 +1,4 @@
+import Foundation
 import GreetingKit
 import Testing
 @testable import SwiftBeansExample
@@ -37,5 +38,40 @@ struct GeneratedWiringTests {
 	func `Given FakeAppContext When reading the banner Then uses the preview greeter`() {
 		let context = FakeAppContext()
 		#expect(context.featuresWelcomeBanner.message.hasPrefix("Hi, SwiftBeans (preview)!"))
+	}
+
+	@Test
+	func `Given qualified decoders When resolved Then each name is its own singleton`() throws {
+		let context = AppContext()
+		#expect(context.jsonDecoder === context.jsonDecoder)
+		#expect(context.snakeCaseJSONDecoder === context.snakeCaseJSONDecoder)
+		#expect(context.jsonDecoder !== context.snakeCaseJSONDecoder)
+		#expect(try context.snakeCaseReader.title(from: SnakeCaseReader.sampleJSON) == "Named decoder")
+		#expect(throws: DecodingError.self) {
+			try context.jsonDecoder.decode(SnakeCaseTitle.self, from: SnakeCaseReader.sampleJSON)
+		}
+	}
+
+	@Test
+	func `Given a named greeter When resolving greeting styles Then each qualifier keeps its bean`() {
+		let context = AppContext()
+		#expect(context.greetingStyles.standard == "Hello, SwiftBeans!")
+		#expect(context.greetingStyles.short == "Hi, SwiftBeans")
+		#expect(context.shortGreeter.greet("Ada") == "Hi, Ada")
+	}
+
+	@Test
+	func `Given named services When resolving the pair Then each qualifier is wired`() {
+		let context = AppContext()
+		#expect(context.builtinStaticTagSource === context.builtinStaticTagSource)
+		#expect(context.tagSourcePair.builtinLabel == "builtin")
+		#expect(context.tagSourcePair.remoteLabel == "remote")
+		#expect(context.remoteTagSource.label == "remote")
+	}
+
+	@Test
+	func `Given feature notes When opening the demo Then the collection is in accessor name order`() {
+		let notes = AppContext().featuresDemoViewModel.featureNotes
+		#expect(notes.map(\.title) == ["@Assisted", "Collections", "Factories", "@Qualifier"])
 	}
 }

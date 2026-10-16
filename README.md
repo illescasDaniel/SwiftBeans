@@ -47,7 +47,7 @@ The package exports two products: the `SwiftBeans` library and the `SwiftBeansPl
 
 ```swift
 dependencies: [
-	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.1.0")),
+	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.2.0")),
 ],
 targets: [
 	.target(
@@ -353,7 +353,7 @@ local_packages:
 
 ## Example app
 
-[`Examples/SwiftBeansExample`](Examples/SwiftBeansExample) is a multiplatform SwiftUI app (iOS + macOS) that uses every feature above: `@Configuration` beans for an HTTP client, a protocol-bound repository, transient view models, `@Inject`, `@Assisted`, a local package via `.swiftbeans.yml`, a coordinator over `AppContextProtocol`, and a `FakeAppContext` for Previews and tests. Debug builds use an offline fake HTTP handler; Release builds use `URLSession.shared`.
+[`Examples/SwiftBeansExample`](Examples/SwiftBeansExample) is a multiplatform SwiftUI app (iOS + macOS) that uses every feature above: `@Configuration` beans for an HTTP client, a protocol-bound repository, transient view models, `@Inject`, `@Assisted`, qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`, including two `JSONDecoder`s), collection injection (`[any FeatureNote]`), factories on `AppCoordinator`, a local package via `.swiftbeans.yml`, and a `FakeAppContext` for Previews and tests. Debug builds use an offline fake HTTP handler; Release builds use `URLSession.shared`. The features screen shows the live wiring.
 
 ```bash
 cd Examples/SwiftBeansExample && xcodebuild test -project SwiftBeansExample.xcodeproj -scheme SwiftBeansExample -destination 'platform=macOS' -skipPackagePluginValidation -skipMacroValidation

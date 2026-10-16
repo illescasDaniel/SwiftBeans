@@ -87,6 +87,7 @@
 - [x] Backlog (after `@Assisted`): let beans inject assisted factories, e.g. `(Item) -> ItemDetailViewModel` — done on `cursor/factory-injection-53df` (2026-10-15)
 
 - [x] Published as public repo `illescasDaniel/SwiftBeans`, MIT license, tag + release `0.1.0` (2026-10-15)
+- [x] Tag + release `0.2.0` (qualifiers, factories, collection injection, graph dump, inter-bean diagnostic, local-package scan refresh, CI, example showcase) (2026-10-16)
 
 ### Possible future improvements (to review; each needs its own spec)
 
@@ -102,7 +103,8 @@ Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 �
 - [x] Child contexts Phase 1: `specs/child-contexts/SPEC.md` drafted (+ proposed `ARCHITECTURE.md` stub); awaiting approval
 - [x] Integration merge on `feature/improvements` + `swift test` green (201 tests / 19 suites, 2026-10-16). Example app combined check still optional.
 - [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
-- [ ] Example app: adopt collection injection / factories / qualifiers as generated-code compile checks on macOS/iOS
+- [x] Example app: qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`), collection injection (`[any FeatureNote]`), factories already on `AppCoordinator`. macOS `xcodebuild test` green (2026-10-16). Duplicate `printError` in `SwiftBeansGeneratorMain` fixed in the same pass (`swift test` does not build the generator executable)
+- [x] Example previews use `PreviewRootView` (debug-only, custom root) so `coordinator.path` is bound; `AppRootView` is constructed only from `@main` (2026-10-16)
 - [ ] Child contexts: approval, Phase 2 contracts, tests, implementation (Phases 0 / A / B–D per the spec; see open questions first)
 - [ ] Investigate Spring-style inter-bean calls (diagnostic slice done; remaining: proxies / instance `@Bean` / macro rewriting, options in `specs/inter-bean-call-diagnostic/SPEC.md` Future work) (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance

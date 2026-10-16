@@ -4,6 +4,8 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-16
+
 ### Added
 
 - Qualifiers: `@Bean(named:)` / `@Service(named:)` and `@Qualifier("…")` so several beans of one type coexist; accessors are `name` + type (`snakeCaseJSONDecoder`). Graphs without qualifiers stay byte-identical.
@@ -12,6 +14,7 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
 - Build warning `bean.directCall` when a `@Bean` body or `@Service` initializer calls another `@Bean` directly instead of taking it as a parameter (see `specs/inter-bean-call-diagnostic/SPEC.md`).
 - Graph dump: after a successful generation the plugin writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot` (Graphviz) next to `SwiftBeansGenerated.swift`. The generator CLI gains `--graph-markdown` / `--graph-dot`.
+- Example app: qualifiers (`JSONDecoder`, `Greeter`, `@Service(named:)`), collection injection of `FeatureNote`, and the features screen that reads them. Factories stay on `AppCoordinator`.
 
 ### Changed
 
@@ -20,6 +23,7 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 ### Fixed
 
 - Generator executable builds on Linux in Swift 6 mode (no direct `stderr` reference).
+- Generator executable compiles after both stderr fixes landed: `printError` was declared twice, which `swift test` does not catch because it does not build `SwiftBeansGenerator`.
 - A new `.swift` file in a `.swiftbeans.yml` local package (or a `.swiftbeans.yml` created later) joins the graph without a clean build: the generator re-reads the config and re-walks the packages on every run.
 
 ## [0.1.0] - 2026-10-15
@@ -38,5 +42,6 @@ First public release.
 - `.swiftbeans.yml` to scan local packages, with automatic imports in generated code.
 - Example multiplatform app (`Examples/SwiftBeansExample`) that exercises every feature and doubles as a compile check for generated code.
 
-[Unreleased]: https://github.com/illescasDaniel/SwiftBeans/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/illescasDaniel/SwiftBeans/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/illescasDaniel/SwiftBeans/releases/tag/0.2.0
 [0.1.0]: https://github.com/illescasDaniel/SwiftBeans/releases/tag/0.1.0
