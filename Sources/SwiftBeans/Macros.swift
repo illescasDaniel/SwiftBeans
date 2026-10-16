@@ -19,6 +19,15 @@ public macro Bean(scope: BeanScope = .singleton) = #externalMacro(
 	type: "BeanMacro"
 )
 
+/// Marks a static factory method that provides a named bean, injected with `@Qualifier(name)`.
+///
+/// `name` must be a string literal shaped like an identifier; the accessor is `name` + type (`snakeCaseJSONDecoder`).
+@attached(peer)
+public macro Bean(named name: String, scope: BeanScope = .singleton) = #externalMacro(
+	module: "SwiftBeansMacros",
+	type: "BeanMacro"
+)
+
 /// Attribute-only stereotype for a concrete injectable type (discovered by the build plugin).
 @attached(member)
 public macro Service(scope: BeanScope = .singleton) = #externalMacro(
@@ -26,9 +35,23 @@ public macro Service(scope: BeanScope = .singleton) = #externalMacro(
 	type: "ServiceMacro"
 )
 
+/// A named `@Service`, injected with `@Qualifier(name)`.
+@attached(member)
+public macro Service(named name: String, scope: BeanScope = .singleton) = #externalMacro(
+	module: "SwiftBeansMacros",
+	type: "ServiceMacro"
+)
+
 /// Registers a concrete type under a protocol (or other) injectable key.
 @attached(member)
 public macro Service(boundTo: Any.Type, scope: BeanScope = .singleton) = #externalMacro(
+	module: "SwiftBeansMacros",
+	type: "ServiceMacro"
+)
+
+/// Registers a concrete type under a protocol (or other) injectable key and a name.
+@attached(member)
+public macro Service(boundTo: Any.Type, named name: String, scope: BeanScope = .singleton) = #externalMacro(
 	module: "SwiftBeansMacros",
 	type: "ServiceMacro"
 )

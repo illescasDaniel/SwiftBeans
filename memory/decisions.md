@@ -21,6 +21,13 @@
 **Decision:** The plugin passes `--graph-markdown` / `--graph-dot` paths to the generator but lists only `SwiftBeansGenerated.swift` in `outputFiles`. v1 always emits on success; no `.swiftbeans.yml` toggle yet.
 
 **Rationale:** A resource bundle in app targets is a worse side effect than the build system not tracking a debug artifact. Trade-off: deleting a graph file by hand does not rerun the generator until an input changes. Content is generated in `SwiftBeansGeneratorCore` (`GraphDump`) so it is unit-tested from fixture sources.
+## 2026-10-15 — Qualifiers: key is (TypeKey, name?), accessor is name + type
+
+**Context:** Apps need several beans of one type (two `JSONDecoder`s). Spring-style global names collide across types; numeric accessor suffixes are unstable.
+
+**Decision:** Introduce `BeanKey` = `(TypeKey, qualifier: String?)`. `named:` on `@Bean`/`@Service` and `@Qualifier("…")` on parameters (property-wrapper marker like `@Assisted`). Accessor = qualifier + type pieces (`snakeCaseJSONDecoder`). Unqualified params never pick a sole named candidate. Name literals must be identifier-shaped. Graphs with no qualifiers stay byte-identical.
+
+**Rationale:** Matches the 2026-10-15 backlog notes; keeps diagnostics and `{Context}Protocol` per-key; avoids global name registries and suffix churn.
 
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 

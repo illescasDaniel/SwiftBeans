@@ -8,17 +8,18 @@ enum CodeGenerator {
 			return "\(header)\nimport Foundation\n"
 		}
 
-		var anyKeys = Set<TypeKey>()
+		// `any` follows the type, whatever qualifier it is spelled with.
+		var anyTypes = Set<TypeKey>()
 		for provider in providers {
-			if provider.spelledWithAny { anyKeys.insert(provider.key) }
+			if provider.spelledWithAny { anyTypes.insert(provider.key.type) }
 			for parameter in provider.parameters where parameter.spelledWithAny {
-				if let key = parameter.key { anyKeys.insert(key) }
+				if let key = parameter.key { anyTypes.insert(key.type) }
 			}
 		}
 		// Assisted keys are not injectable, so a defaulted parameter with one keeps its default.
 		let provided = Set(providers.filter { !$0.isAssisted }.map(\.key))
-		func typeName(_ key: TypeKey) -> String {
-			anyKeys.contains(key) ? "any \(key)" : key.description
+		func typeName(_ key: BeanKey) -> String {
+			anyTypes.contains(key.type) ? "any \(key.type)" : key.type.description
 		}
 
 		let sorted = providers.sorted { $0.key.accessorName < $1.key.accessorName }

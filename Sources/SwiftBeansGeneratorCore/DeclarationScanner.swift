@@ -14,6 +14,8 @@ struct ScannedFile {
 	var conditionalDecls: [SourcePosition] = []
 	/// `@Assisted` on stored properties of scanned types (parameters only; SPEC Assisted providers, rule 7).
 	var assistedPropertyLocations: [SourcePosition] = []
+	/// `@Qualifier` on stored properties of scanned types (parameters only; qualifiers SPEC).
+	var qualifierPropertyLocations: [SourcePosition] = []
 	var imports: [ImportRecord] = []
 	/// Initializer bodies of every scanned type (and extension), for the inter-bean call diagnostic.
 	var initializerBodies: [InitializerBody] = []
@@ -93,6 +95,8 @@ struct ParameterInfo {
 	var typeSpelling: String
 	/// `@Assisted` / `@SwiftBeans.Assisted`.
 	var isAssisted: Bool
+	/// `@Qualifier(…)` / `@SwiftBeans.Qualifier(…)`.
+	var qualifier: QualifierUse?
 	/// `T...`
 	var isVariadic: Bool
 	/// `inout T`
@@ -101,9 +105,25 @@ struct ParameterInfo {
 	var defaultLocation: SourcePosition?
 }
 
+/// A `@Qualifier` attribute on a parameter.
+struct QualifierUse {
+	/// The attribute.
+	var location: SourcePosition
+	var name: Result<String, LocatedViolation>
+}
+
+/// A `SwiftBeansSyntaxRules.Violation` the generator reports itself, at a scanned position.
+struct LocatedViolation: Error {
+	var id: String
+	var message: String
+	var location: SourcePosition
+}
+
 struct ServiceDecl {
 	var typeName: String
 	var scope: ScopeLiteral
+	/// `named:`
+	var qualifier: String?
 	/// The `scope:` argument; non-nil only when a literal scope is written explicitly.
 	var scopeLocation: SourcePosition?
 	/// `boundTo:` key, when present.
@@ -116,6 +136,8 @@ struct BeanDecl {
 	var enclosingName: String
 	var name: String
 	var scope: ScopeLiteral
+	/// `named:`
+	var qualifier: String?
 	/// The `scope:` argument; non-nil only when a literal scope is written explicitly.
 	var scopeLocation: SourcePosition?
 	var isPublic: Bool
@@ -270,26 +292,30 @@ struct DeclarationScanner {
 			hasWrappedProperty: hasWrappedProperty,
 			location: location
 		))
-		recordAssistedProperties(members)
+		recordMarkerProperties(members)
 		recordInitializerBodies(members, typeName: name)
 		walkMembers(members, enclosing: .type(name), conditional: conditional)
 	}
 
-	/// `@Assisted` belongs on parameters; on a stored property it is an error.
-	private mutating func recordAssistedProperties(_ members: MemberBlockItemListSyntax) {
+	/// `@Assisted` and `@Qualifier` belong on parameters; on a stored property they are errors.
+	private mutating func recordMarkerProperties(_ members: MemberBlockItemListSyntax) {
 		for member in members {
 			guard let variable = member.decl.as(VariableDeclSyntax.self),
 			      variable.bindings.contains(where: { isStored($0) })
 			else { continue }
-			for case .attribute(let attribute) in variable.attributes where SwiftBeansSyntaxRules.isAssisted(attribute) {
-				result.assistedPropertyLocations.append(position(attribute))
+			for case .attribute(let attribute) in variable.attributes {
+				if SwiftBeansSyntaxRules.isAssisted(attribute) {
+					result.assistedPropertyLocations.append(position(attribute))
+				} else if SwiftBeansSyntaxRules.isQualifier(attribute) {
+					result.qualifierPropertyLocations.append(position(attribute))
+				}
 			}
 		}
 	}
 
 	private mutating func recordService(_ decl: DeclSyntax, attribute: AttributeSyntax, typeName: String, location: SourcePosition) {
-		// Wrong kind and generic types are the macro's errors; they cannot be wired.
-		let skipped: Set<String> = ["service.wrongKind", "service.generic"]
+		// Wrong kind, generic types and bad names are the macro's errors; they cannot be wired.
+		let skipped: Set<String> = ["service.wrongKind", "service.generic", "qualifier.notLiteral", "qualifier.invalidName"]
 		guard !SwiftBeansSyntaxRules.serviceViolations(decl, attribute: attribute).contains(where: { skipped.contains($0.id) }) else {
 			return
 		}
@@ -309,6 +335,7 @@ struct DeclarationScanner {
 		result.services.append(ServiceDecl(
 			typeName: typeName,
 			scope: (try? SwiftBeansSyntaxRules.scope(of: attribute).get()) ?? .singleton,
+			qualifier: try? SwiftBeansSyntaxRules.named(of: attribute).get(),
 			scopeLocation: scopeLocation(of: attribute),
 			boundTo: boundTo,
 			location: location
@@ -316,8 +343,8 @@ struct DeclarationScanner {
 	}
 
 	private mutating func visitBean(_ function: FunctionDeclSyntax, attribute: AttributeSyntax, enclosing: Enclosing) {
-		// Without a return type or with generic parameters there is no key; the macro reports it.
-		let skipped: Set<String> = ["bean.noReturnType", "bean.generic"]
+		// Without a return type, with generic parameters or a bad name there is no key; the macro reports it.
+		let skipped: Set<String> = ["bean.noReturnType", "bean.generic", "qualifier.notLiteral", "qualifier.invalidName"]
 		guard !SwiftBeansSyntaxRules.beanViolations(function, attribute: attribute).contains(where: { skipped.contains($0.id) }),
 		      let returnType = function.signature.returnClause?.type
 		else {
@@ -333,6 +360,7 @@ struct DeclarationScanner {
 			enclosingName: enclosing.name,
 			name: function.name.text,
 			scope: (try? SwiftBeansSyntaxRules.scope(of: attribute).get()) ?? .singleton,
+			qualifier: try? SwiftBeansSyntaxRules.named(of: attribute).get(),
 			scopeLocation: scopeLocation(of: attribute),
 			isPublic: isPublic,
 			parameters: parameters(function.signature.parameterClause.parameters),
@@ -414,6 +442,7 @@ struct DeclarationScanner {
 				key: key(for: parameter.type, hasDefault: hasDefault),
 				typeSpelling: parameter.type.trimmedDescription,
 				isAssisted: SwiftBeansSyntaxRules.isAssisted(parameter),
+				qualifier: SwiftBeansSyntaxRules.qualifierAttribute(in: parameter.attributes).map(qualifierUse),
 				isVariadic: parameter.ellipsis != nil,
 				isInout: isInout,
 				defaultLocation: parameter.defaultValue.map { position($0.value) }
@@ -431,9 +460,11 @@ struct DeclarationScanner {
 			if modifiers.contains(.keyword(.static)) || modifiers.contains(.keyword(.class)) || modifiers.contains(.keyword(.lazy)) {
 				continue
 			}
-			// `@Assisted` on a property is reported by `recordAssistedProperties`; it is not a parameter.
+			// `@Assisted` / `@Qualifier` on a property is reported by `recordMarkerProperties`; it is not a parameter.
 			if variable.attributes.contains(where: { element in
-				if case .attribute(let attribute) = element { return SwiftBeansSyntaxRules.isAssisted(attribute) }
+				if case .attribute(let attribute) = element {
+					return SwiftBeansSyntaxRules.isAssisted(attribute) || SwiftBeansSyntaxRules.isQualifier(attribute)
+				}
 				return false
 			}) {
 				continue
@@ -458,6 +489,7 @@ struct DeclarationScanner {
 					key: type.map { key(for: $0, hasDefault: hasDefault) },
 					typeSpelling: type?.trimmedDescription ?? "",
 					isAssisted: false,
+					qualifier: nil,
 					isVariadic: false,
 					isInout: false,
 					defaultLocation: binding.initializer.map { position($0.value) }
@@ -465,6 +497,15 @@ struct DeclarationScanner {
 			}
 		}
 		return (parameters, hasWrappedProperty)
+	}
+
+	private func qualifierUse(_ attribute: AttributeSyntax) -> QualifierUse {
+		QualifierUse(
+			location: position(attribute),
+			name: SwiftBeansSyntaxRules.qualifierName(of: attribute).mapError { violation in
+				LocatedViolation(id: violation.id, message: violation.message, location: position(violation.node))
+			}
+		)
 	}
 
 	/// A defaulted `T?` parameter is looked up as `T`.

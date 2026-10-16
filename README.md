@@ -202,6 +202,34 @@ let viewModel = context.itemDetailViewModel(item: selectedItem)
 - Other beans cannot inject an assisted type (the graph has no runtime arguments to give); the error names the method to call. Injecting factories such as `(Item) -> ItemDetailViewModel` is planned.
 - Default values, `inout` and variadic `@Assisted` parameters are not supported yet.
 
+## Qualifiers: several beans of one type
+
+When you need two differently configured beans of the same type, name them and ask with `@Qualifier`:
+
+```swift
+@Configuration
+enum Coding {
+	@Bean
+	static func decoder() -> JSONDecoder { JSONDecoder() }
+
+	@Bean(named: "snakeCase")
+	static func snakeCaseDecoder() -> JSONDecoder {
+		let decoder = JSONDecoder()
+		decoder.keyDecodingStrategy = .convertFromSnakeCase
+		return decoder
+	}
+}
+
+@Service
+final class ItemParser {
+	init(@Qualifier("snakeCase") decoder: JSONDecoder, fallback: JSONDecoder) { … }
+}
+
+// Generated accessors: jsonDecoder, snakeCaseJSONDecoder
+```
+
+The key is `(type, name)`, so `snakeCase` on `JSONDecoder` and on `JSONEncoder` are unrelated. An unqualified parameter never silently picks a named bean. See [`specs/qualifiers/SPEC.md`](specs/qualifiers/SPEC.md).
+
 ## Testing and Previews: `{Context}Protocol`
 
 For each context the plugin also generates a protocol with the same accessors and methods, and conforms the context to it:
@@ -272,7 +300,7 @@ local_packages:
 - Annotated declarations inside `#if` blocks are a build error (the generator can't know which branch compiles). `#if` inside a function body is fine.
 - Unsupported key types: optionals, tuples, functions, `some P`, metatypes, `any A & B`, generic parameters. Wrap them in a named type or provide a protocol.
 - Keys match by spelling after normalization: `[String: Int]` ≡ `Dictionary<String, Int>`, `any P` ≡ `P`, but a typealias and its underlying type are different keys.
-- Generic `@Service` types, property injection, qualifiers and subcontexts are not supported in v1.
+- Generic `@Service` types, property injection and subcontexts are not supported in v1.
 
 ## Example app
 

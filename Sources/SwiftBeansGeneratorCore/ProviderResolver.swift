@@ -9,7 +9,7 @@ struct BeanProvider {
 		case staticMethod(typeName: String, name: String)
 	}
 
-	var key: TypeKey
+	var key: BeanKey
 	var spelledWithAny: Bool
 	var scope: ScopeLiteral
 	var origin: SourceFile.Origin
@@ -30,7 +30,7 @@ struct BeanParameter {
 	/// `nil` for `_`.
 	var label: String?
 	/// `nil` when the parameter can only take its default (unsupported or unwritten type), and always for an assisted one.
-	var key: TypeKey?
+	var key: BeanKey?
 	var spelledWithAny: Bool
 	var hasDefault: Bool
 	var location: SourcePosition
@@ -65,6 +65,9 @@ struct ProviderResolver {
 			}
 			for location in file.assistedPropertyLocations {
 				resolver.error("assisted.property", at: location, "@Assisted can only be applied to parameters, not stored properties")
+			}
+			for location in file.qualifierPropertyLocations {
+				resolver.error("qualifier.property", at: location, "@Qualifier can only be applied to parameters, not stored properties")
 			}
 			for service in file.services {
 				resolver.resolve(service, origin: file.source.origin)
@@ -149,7 +152,7 @@ struct ProviderResolver {
 
 		let resolved = resolveParameters(parameters)
 		providers.append(BeanProvider(
-			key: normalized.key,
+			key: BeanKey(normalized.key, qualifier: service.qualifier),
 			spelledWithAny: normalized.spelledWithAny,
 			scope: scope(service.scope, scopeLocation: service.scopeLocation, parameters: resolved),
 			origin: origin,
@@ -211,7 +214,7 @@ struct ProviderResolver {
 		}
 		let resolved = resolveParameters(bean.parameters)
 		providers.append(BeanProvider(
-			key: normalized.key,
+			key: BeanKey(normalized.key, qualifier: bean.qualifier),
 			spelledWithAny: normalized.spelledWithAny,
 			scope: scope(bean.scope, scopeLocation: bean.scopeLocation, parameters: resolved),
 			origin: origin,
@@ -238,6 +241,31 @@ struct ProviderResolver {
 	/// Assisted parameters are runtime arguments, not keys: their types are not normalized.
 	private mutating func resolveParameters(_ parameters: [ParameterInfo]) -> [BeanParameter] {
 		parameters.map { parameter in
+			var qualifier: String?
+			if let use = parameter.qualifier {
+				if parameter.isAssisted {
+					error(
+						"qualifier.assisted",
+						at: use.location,
+						"@Qualifier cannot be combined with @Assisted; runtime arguments are not looked up in the graph"
+					)
+				} else {
+					switch use.name {
+					case .success(let name):
+						qualifier = name
+					case .failure(let violation):
+						error(violation.id, at: violation.location, violation.message)
+						return BeanParameter(
+							label: parameter.label,
+							key: nil,
+							spelledWithAny: false,
+							hasDefault: parameter.hasDefault,
+							location: parameter.location,
+							assisted: nil
+						)
+					}
+				}
+			}
 			if parameter.isAssisted {
 				if let defaultLocation = parameter.defaultLocation {
 					error("assisted.default", at: defaultLocation, "@Assisted parameters cannot have a default value")
@@ -261,11 +289,11 @@ struct ProviderResolver {
 					)
 				)
 			}
-			var key: TypeKey?
+			var key: BeanKey?
 			var spelledWithAny = false
 			switch parameter.key {
 			case .success(let normalized):
-				key = normalized.key
+				key = BeanKey(normalized.key, qualifier: qualifier)
 				spelledWithAny = normalized.spelledWithAny
 			case .failure(let unsupported) where !parameter.hasDefault:
 				error("key.unsupported", at: parameter.typeLocation, "cannot inject '\(parameter.typeSpelling)': \(unsupported)")

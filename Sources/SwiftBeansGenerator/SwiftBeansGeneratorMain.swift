@@ -115,4 +115,9 @@ struct SwiftBeansGeneratorMain {
 		printError("error: \(message)")
 		exit(1)
 	}
+
+	/// Glibc's `stderr` is a mutable global, which strict concurrency rejects on Linux.
+	private static func printError(_ line: String) {
+		FileHandle.standardError.write(Data("\(line)\n".utf8))
+	}
 }

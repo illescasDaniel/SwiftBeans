@@ -6,6 +6,7 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 ### Added
 
+- Qualifiers: `@Bean(named:)` / `@Service(named:)` and `@Qualifier("…")` so several beans of one type coexist; accessors are `name` + type (`snakeCaseJSONDecoder`). Graphs without qualifiers stay byte-identical.
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
 - Build warning `bean.directCall` when a `@Bean` body or `@Service` initializer calls another `@Bean` directly instead of taking it as a parameter (see `specs/inter-bean-call-diagnostic/SPEC.md`).
 - Graph dump: after a successful generation the plugin writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot` (Graphviz) next to `SwiftBeansGenerated.swift`. The generator CLI gains `--graph-markdown` / `--graph-dot`.

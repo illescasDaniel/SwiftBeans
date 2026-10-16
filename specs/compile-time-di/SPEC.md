@@ -638,7 +638,7 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 - `@Service` synthesizing protocol conformances or registration markers (attribute-only)
 - Instance (non-static) `@Bean` methods
 - `@Autowired` property injection, field injection, method injection
-- Spring AOP, `@Transactional`, proxies, named qualifiers (deferred)
+- Spring AOP, `@Transactional`, proxies (named qualifiers: see [`specs/qualifiers/SPEC.md`](../qualifiers/SPEC.md))
 - Context arguments (values passed into the `@ApplicationContext` initializer and injected as beans) — deferred
 - Annotated declarations inside `#if` blocks (fail the build in v1)
 - Matching keys across typealiases or module-qualified spellings (matched by spelling; diagnostics hint at near matches)
@@ -665,7 +665,7 @@ If, during Phase 4, compile-time generation + plugin scanning cannot satisfy the
 | Multi-module scan | YAML config (supports Xcode apps without `Package.swift`) |
 | Source discovery | Build-system file list + `.swiftbeans.yml` at the package/project root only; no folder heuristics or upward search (2026-10-15) |
 | `@Bean` methods | Must be `static` |
-| Named qualifiers | Deferred (no v1 BDD requirement) |
+| Named qualifiers | See [`specs/qualifiers/SPEC.md`](../qualifiers/SPEC.md) |
 | Context protocol name | `{ContextTypeName}Protocol` (e.g. `AppContextProtocol`); fakes are user-owned |
 | Key matching | Normalized syntax; `any P` ≡ `P`; qualified names / typealiases by spelling (2026-10-15) |
 | Accessor names | Derived from the key with defined rules for nested, collection and generic types; keywords escaped; collisions fail (2026-10-15) |

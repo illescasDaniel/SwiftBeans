@@ -94,13 +94,7 @@ Suggested order: CI first, then factory injection, then qualifiers.
 
 - [x] CI: GitHub Action (`.github/workflows/ci.yml`, `xcode-27` runner, Xcode 27.0) running `swift test` + example macOS tests and iOS Simulator build; README badge; `CHANGELOG.md` (2026-10-15). Releases stay semver `0.x` while the API may break
 - [ ] Factory injection (same item as the backlog above): `(Item) -> ItemDetailViewModel` and deferred `() -> T` (expensive objects, breaking cycles)
-- [ ] Qualifiers: `@Bean(named: "snakeCase")` / `@Service(named:)` + `@Qualifier("snakeCase") decoder: JSONDecoder`. Notes from the 2026-10-15 discussion:
-	- Key is (type, qualifier), not a global name: `snakeCase` on `JSONDecoder` and on `JSONEncoder` are different beans
-	- Unqualified bean is the default; unknown (type, name) pair is a build error at the parameter; names must be string literals
-	- Unqualified parameter with only named beans of that type → build error (no implicit single-candidate pick)
-	- Accessor = qualifier + type (`snakeCaseJSONDecoder`); collision with a real type's accessor is a build error at both declarations (no numeric suffixes: unstable, unreadable). Maybe later: `accessor:` override
-	- `@Qualifier` as a marker property wrapper on parameters (same trick as `@Assisted`); works with protocol-bound beans; `{Context}Protocol` gains qualified accessors
-	- Acceptance criterion: a graph without qualifiers generates byte-identical output to today
+- [x] Qualifiers: `@Bean(named:)` / `@Service(named:)` + `@Qualifier("…")` — `specs/qualifiers/SPEC.md`, `BeanKey`, generator + tests (2026-10-15). Optional later: `accessor:` override; example-app demo
 - [ ] Collection injection: `[any AnalyticsTracker]` receives every bean bound to that protocol (trackers, interceptors, plugins)
 - [x] Graph dump: generator/plugin emit `SwiftBeansGraph.md` + `SwiftBeansGraph.dot` on success (`specs/graph-dump/SPEC.md`). Future: `.swiftbeans.yml` toggle (2026-10-15)
 - [x] Fix known limitation: a new file in a local package may need a clean build before it joins the graph (2026-10-15): generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs (SwiftPM rejects source-built prebuild commands; see decisions). Xcode behavior unverified (no Xcode on Linux)
