@@ -95,6 +95,41 @@ package struct GenerationResult: Sendable, Equatable {
 }
 
 package enum SwiftBeansGeneration {
+	/// Re-resolves the scan set from disk, then runs `generate(input:)`.
+	///
+	/// Reads `<scanRoot>/<configFileName>` when it exists and walks each listed local package target's
+	/// `Sources/<target>/` folder, so files and config added since the plugin planned the build are included.
+	/// A config problem is reported as an error at the config file (and line), and nothing is generated.
+	package static func generate(request: GeneratorRequest, fileManager: FileManager = .default) -> GenerationResult {
+		let scanRoot = URL(filePath: request.scanRoot, directoryHint: .isDirectory)
+		let configURL = scanRoot.appending(path: request.configFileName)
+		var packages: [LocalPackageTargetSources] = []
+		if fileManager.fileExists(atPath: configURL.path) {
+			do {
+				let configuration = try ScanConfigurationParser.load(contentsOf: configURL)
+				packages = try ScanSetResolver.localPackageSources(
+					for: configuration,
+					configDirectory: scanRoot,
+					fileManager: fileManager
+				)
+			} catch {
+				return GenerationResult(
+					diagnostics: [GeneratorDiagnostic(
+						id: "config.invalid",
+						location: SourcePosition(file: configURL.path, line: error.line ?? 1, column: 1),
+						message: error.message
+					)],
+					output: nil
+				)
+			}
+		}
+		let input = GeneratorInput(
+			targetSources: request.targetSources,
+			localPackages: packages.map { .init(module: $0.module, sources: $0.files.map(\.path)) }
+		)
+		return generate(input: input, fileManager: fileManager)
+	}
+
 	/// Reads every file in `input`, then runs `generate(sources:)`.
 	///
 	/// Paths are de-duplicated after resolving symlinks; a file listed as both a target source and a

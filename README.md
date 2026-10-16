@@ -261,7 +261,7 @@ local_packages:
 - Providers in local packages must be `public` (type, selected initializer, or `public static` `@Bean` in a `public` configuration).
 - A wrong path, missing target folder or unsupported YAML fails the build with an error pointing at the entry.
 - Types from other dependencies (remote packages, SDKs) are registered with `@Bean`.
-- Known limitation: a new file added to a local package may need a clean build before it joins the graph.
+- Adding a file under a listed target (or creating/editing `.swiftbeans.yml`) regenerates the wiring on the next build; no clean build needed. Edge case: files added to a folder that was itself created after the last plugin planning may need a re-plan (edit any file in the app target).
 
 ## Rules worth knowing
 

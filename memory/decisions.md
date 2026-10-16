@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-15 — Local package scan: generator re-resolves every run; prebuild rejected by SwiftPM
+
+**Context:** `createBuildCommands` froze the local-package file list at plan time, so a new `.swift` file in a `.swiftbeans.yml` package needed a clean build. The planned fix was a `prebuildCommand` that runs every build.
+
+**Decision:** SwiftPM refuses prebuild commands whose executable is built from source (`a prebuild command cannot use executables built from source, including executable target 'SwiftBeansGenerator'`, same with `--build-system swiftbuild`). Kept a `buildCommand`, but moved all scan decisions into the generator: the plugin writes `SwiftBeansRequest.json` (`GeneratorRequest`: scan root, target sources, config name) and the generator (`SwiftBeansGeneration.generate(request:)`) re-reads `.swiftbeans.yml` and re-walks `Sources/<target>/` on every run, reporting config errors as `config.invalid` diagnostics. The plugin declares the scan root, config, local package files and their *folders* as inputs, so adding/removing a file (folder mtime) reruns the generator. Output stays byte-stable via `GeneratedFileWriter`.
+
+**Rationale:** Verified with an SPM test app: new files in existing/nested folders, a new subfolder, a config created or edited later all regenerate without a clean build; a no-op rebuild leaves the output untouched. A binary-target generator (artifact bundle per release) would allow a true prebuild but is a separate effort. Residual edge cases and the Xcode behavior (not testable on Linux) are documented under SPEC Known limitations.
+
 ## 2026-10-15 — Versioning: stay on 0.x, publish under MIT
 
 **Context:** First public release of the package on GitHub (`illescasDaniel/SwiftBeans`).

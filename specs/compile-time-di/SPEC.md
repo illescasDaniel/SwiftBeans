@@ -181,11 +181,15 @@ The scan set is defined by the build system and the config file, never by guessi
 1. **Target sources come from the build system.** The plugin scans exactly the Swift files the build system reports as the target's compiled sources (SPM: the source target's source files; Xcode: the target's input files). It does not walk folders, infer a "source root", or look for specific file names (e.g. an `App` entry file or `Assets.xcassets`). Files on disk that are not members of the target (excluded files, other targets' files, test sources in the same folder) are never scanned.
 2. **One config location, no upward search.** The config file is looked up only at the root of the package (SPM) or the folder containing the `.xcodeproj` (Xcode). The plugin passes its path to the generator explicitly. Neither the plugin nor the generator searches parent folders. A `.swiftbeans.yml` above that root (e.g. in `~` or an enclosing repo) has no effect. If the config file is absent, only the target's own sources are scanned.
 3. **Local package sources are resolved from `Sources/<target>`.** Each `local_packages` entry's `path` is resolved relative to the folder containing the config file and normalized (`..` and symlinks resolved). The path must be a folder containing a `Package.swift`, and each listed target must have a `Sources/<target>/` folder; all `.swift` files under it (recursively) are scanned. Packages whose targets use a custom `path:` in their manifest are out of scope for v1.
-4. **Every scanned file is a declared build input.** The target sources, every resolved local package source, and the config file itself are declared as inputs of the generation step, so editing any of them regenerates the wiring on the next build. (Adding a *new* file to a local package is picked up when the build system re-plans the plugin; see Known limitations.)
-5. **Config mistakes fail the build.** A config that cannot be read, a `local_packages` path that does not exist or has no `Package.swift`, a missing `Sources/<target>/` folder, or YAML outside the documented schema (block lists of `path` / `targets`, optional single or double quotes, `#` comments) fails the build with a diagnostic naming the config file and the offending entry. Nothing is skipped silently.
+4. **The scan set is re-resolved every time the generator runs.** The plugin only tells the generator *where* to scan: the scan root, the target's source list from the build system, and the config file name. The generator re-reads `.swiftbeans.yml` (when present) and re-walks each listed `Sources/<target>/` folder on every run, so the plan-time file list is never the source of truth for the generated wiring. The generator is rerun when the build system sees a change in a declared input: the target sources, the config file, every local package source, and the **folders** containing them (adding or removing a file changes its folder's modification date, which plugins can declare but not watch otherwise). The scan root folder is also an input, so a `.swiftbeans.yml` created later is picked up without re-planning. Output is written only when its bytes change, so an unchanged graph does not recompile.
+5. **Config mistakes fail the build.** A config that cannot be read, a `local_packages` path that does not exist or has no `Package.swift`, a missing `Sources/<target>/` folder, or YAML outside the documented schema (block lists of `path` / `targets`, optional single or double quotes, `#` comments) fails the build with a diagnostic naming the config file and the offending entry (reported by the generator when it runs). Nothing is skipped silently.
 6. **Stable scan order.** The scan set is de-duplicated by resolved path and sorted before parsing, so generated output does not depend on the order the build system lists files.
 
-**Known limitations (v1):** a new `.swift` file added to a local package may need a clean build or project re-plan in Xcode before it joins the graph, because build plugins cannot watch folders.
+**Known limitations (v1):**
+
+- SwiftPM forbids prebuild commands that use an executable built from source ("a prebuild command cannot use executables built from source"), so the generator runs as a build command whose inputs include the folders above rather than as an unconditional prebuild. The generator's own scan is always fresh, but *when* it reruns depends on the build system noticing a declared input change.
+- Inputs are declared from the plan-time scan. A file added to a folder that did not exist at plan time (a brand-new subfolder, or a target folder that was empty) reruns the generator through its parent folder, but further files added to that new folder may not rerun it until the plugin is planned again (any edit to the target's sources or to `.swiftbeans.yml` re-plans it).
+- Adding a package or target to `.swiftbeans.yml` reruns the generator (the config is an input), but edits to the new package's existing files only rerun it once the plugin is planned again.
 
 ### Generator rules
 
@@ -409,6 +413,18 @@ Tests/SwiftBeansMacrosTests/  # Macro expansion tests
 **And** the app has built once  
 **When** `Greeter`'s initializer gains a dependency provided by the graph and the app builds again  
 **Then** the generator runs again and the generated accessor passes the new dependency
+
+### Scenario: Adding a file to a local package joins the graph without a clean build
+
+**Given** a `.swiftbeans.yml` listing a local package target, and the app has built once  
+**When** a new `.swift` file with a `@Service` is added under that target's `Sources/<target>/` folder (including a nested folder) and the app builds again  
+**Then** the generator runs again, re-walks the folder, and that `@Service` is part of the graph
+
+### Scenario: Creating the config later is picked up
+
+**Given** an app that has built with no `.swiftbeans.yml`  
+**When** a `.swiftbeans.yml` listing a local package target is created and the app builds again  
+**Then** that target's `@Service` types join the graph without a clean build
 
 ### Scenario: Editing the config regenerates the wiring
 

@@ -3,8 +3,10 @@ import PackagePlugin
 
 /// Runs `SwiftBeansGenerator` over the target's sources plus any `.swiftbeans.yml` local packages.
 ///
-/// The scan set comes only from the build system's file list and the config file at the scan root
-/// (package folder for SPM, `.xcodeproj` folder for Xcode). See SPEC → Source discovery.
+/// The plugin only describes where to scan (a request JSON). The generator re-reads the config and
+/// re-walks the local packages every time it runs, so the plan-time file list is never the source of truth
+/// for what gets generated. The plan-time resolution below only decides when the build system reruns the
+/// generator. See SPEC → Source discovery.
 @main
 struct SwiftBeansPlugin: BuildToolPlugin {
 	func createBuildCommands(context: PluginContext, target: Target) async throws -> [Command] {
@@ -20,9 +22,8 @@ struct SwiftBeansPlugin: BuildToolPlugin {
 		)
 	}
 
-	static let configFileName = ".swiftbeans.yml"
 	static let outputFileName = "SwiftBeansGenerated.swift"
-	static let inputFileName = "SwiftBeansInput.json"
+	static let requestFileName = "SwiftBeansRequest.json"
 
 	static func makeCommands(
 		targetName: String,
@@ -31,47 +32,59 @@ struct SwiftBeansPlugin: BuildToolPlugin {
 		workDirectory: URL,
 		generator: URL
 	) throws -> [Command] {
-		let configURL = scanRoot.appending(path: configFileName)
-		var packages: [LocalPackageTargetSources] = []
-		var inputFiles = targetSources
-		if FileManager.default.fileExists(atPath: configURL.path) {
-			do {
-				let configuration = try ScanConfigurationParser.load(contentsOf: configURL)
-				packages = try ScanSetResolver.localPackageSources(for: configuration, configDirectory: scanRoot)
-			} catch {
-				Diagnostics.error(error.message, file: configURL.path, line: error.line)
-				return []
-			}
-			inputFiles.append(configURL)
-			inputFiles += packages.flatMap(\.files)
-		}
-
 		// The file list goes through a JSON file: one argument per source can exceed the OS limit.
-		let input = GeneratorInput(
-			targetSources: targetSources.map(\.path),
-			localPackages: packages.map { .init(module: $0.module, sources: $0.files.map(\.path)) }
-		)
-		let inputURL = workDirectory.appending(path: inputFileName)
-		try writeIfChanged(input, to: inputURL)
-		inputFiles.append(inputURL)
+		let request = GeneratorRequest(scanRoot: scanRoot.path, targetSources: targetSources.map(\.path))
+		let requestURL = workDirectory.appending(path: requestFileName)
+		try writeIfChanged(request, to: requestURL)
 
 		let output = workDirectory.appending(path: outputFileName)
 		return [
 			.buildCommand(
 				displayName: "SwiftBeans: generate \(targetName)",
 				executable: generator,
-				arguments: ["--output", output.path, "--input", inputURL.path],
-				inputFiles: inputFiles,
+				arguments: ["--output", output.path, "--request", requestURL.path],
+				inputFiles: targetSources + [requestURL] + watchedPaths(request: request),
 				outputFiles: [output]
 			),
 		]
 	}
 
+	/// Build inputs that make the build system rerun the generator when the scan set changes.
+	///
+	/// Folders are inputs too: adding or removing a file changes its folder's modification date, which
+	/// plugins cannot otherwise watch. The scan root covers a `.swiftbeans.yml` created later.
+	/// Config errors are ignored here; the generator reports them when it runs.
+	private static func watchedPaths(request: GeneratorRequest) -> [URL] {
+		let scanRoot = URL(filePath: request.scanRoot, directoryHint: .isDirectory)
+		let configURL = scanRoot.appending(path: request.configFileName)
+		var paths = [scanRoot]
+		guard FileManager.default.fileExists(atPath: configURL.path) else {
+			return paths
+		}
+		paths.append(configURL)
+		guard
+			let configuration = try? ScanConfigurationParser.load(contentsOf: configURL),
+			let packages = try? ScanSetResolver.localPackageSources(for: configuration, configDirectory: scanRoot)
+		else {
+			return paths
+		}
+		var folders = Set<String>()
+		for file in packages.flatMap(\.files) {
+			paths.append(file)
+			var folder = file.deletingLastPathComponent()
+			while folders.insert(folder.path).inserted, folder.lastPathComponent != "Sources" {
+				paths.append(folder)
+				folder = folder.deletingLastPathComponent()
+			}
+		}
+		return paths
+	}
+
 	/// Leaves an identical file untouched so its modification date does not rerun the generator.
-	private static func writeIfChanged(_ input: GeneratorInput, to url: URL) throws {
+	private static func writeIfChanged(_ request: GeneratorRequest, to url: URL) throws {
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-		let data = try encoder.encode(input)
+		let data = try encoder.encode(request)
 		if let existing = try? Data(contentsOf: url), existing == data {
 			return
 		}

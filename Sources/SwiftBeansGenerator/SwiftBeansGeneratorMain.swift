@@ -2,16 +2,18 @@ import Foundation
 import SwiftBeansGeneratorCore
 
 /// ```
+/// SwiftBeansGenerator --output <file> --request <generator-request.json>
 /// SwiftBeansGenerator --output <file> --input <generator-input.json>
 /// SwiftBeansGenerator --output <file> <source.swift>...   # debugging: all files are target sources
 /// ```
 ///
-/// Parses exactly the sources it is given; `SwiftBeansPlugin` owns the scan set
-/// (target files + `.swiftbeans.yml` local packages) and writes the input JSON.
+/// `--request` is what `SwiftBeansPlugin` uses: the generator re-reads `.swiftbeans.yml` and re-walks the
+/// local packages on every run. `--input` and plain source paths parse exactly the files given.
 @main
 struct SwiftBeansGeneratorMain {
 	static let usage = """
-		usage: SwiftBeansGenerator --output <file> --input <generator-input.json>
+		usage: SwiftBeansGenerator --output <file> --request <generator-request.json>
+		       SwiftBeansGenerator --output <file> --input <generator-input.json>
 		       SwiftBeansGenerator --output <file> <source.swift>...
 		"""
 
@@ -19,21 +21,22 @@ struct SwiftBeansGeneratorMain {
 		let arguments = Array(CommandLine.arguments.dropFirst())
 		var outputPath: String?
 		var inputPath: String?
+		var requestPath: String?
 		var sourcePaths: [String] = []
 
 		var index = 0
 		while index < arguments.count {
 			let argument = arguments[index]
 			switch argument {
-			case "--output", "--input":
+			case "--output", "--input", "--request":
 				index += 1
 				guard index < arguments.count else {
 					fail("\(argument) requires a path")
 				}
-				if argument == "--output" {
-					outputPath = arguments[index]
-				} else {
-					inputPath = arguments[index]
+				switch argument {
+				case "--output": outputPath = arguments[index]
+				case "--input": inputPath = arguments[index]
+				default: requestPath = arguments[index]
 				}
 			case "--help", "-h":
 				print(usage)
@@ -51,36 +54,52 @@ struct SwiftBeansGeneratorMain {
 			fail("--output is required\n\(usage)")
 		}
 
-		let input: GeneratorInput
-		if let inputPath {
+		let result: GenerationResult
+		if let requestPath {
+			guard inputPath == nil, sourcePaths.isEmpty else {
+				fail("--request cannot be combined with --input or source paths")
+			}
+			do {
+				let request = try JSONDecoder().decode(GeneratorRequest.self, from: Data(contentsOf: URL(filePath: requestPath)))
+				result = SwiftBeansGeneration.generate(request: request)
+			} catch {
+				fail("cannot read \(requestPath): \(error)")
+			}
+		} else if let inputPath {
 			guard sourcePaths.isEmpty else {
 				fail("pass either --input or source paths, not both")
 			}
 			do {
-				input = try JSONDecoder().decode(GeneratorInput.self, from: Data(contentsOf: URL(filePath: inputPath)))
+				let input = try JSONDecoder().decode(GeneratorInput.self, from: Data(contentsOf: URL(filePath: inputPath)))
+				result = SwiftBeansGeneration.generate(input: input)
 			} catch {
 				fail("cannot read \(inputPath): \(error)")
 			}
 		} else {
-			input = GeneratorInput(targetSources: sourcePaths)
+			result = SwiftBeansGeneration.generate(input: GeneratorInput(targetSources: sourcePaths))
 		}
 
-		let result = SwiftBeansGeneration.generate(input: input)
 		for diagnostic in result.diagnostics {
-			fputs("\(diagnostic.rendered)\n", stderr)
+			printError(diagnostic.rendered)
 		}
 		guard let output = result.output else {
 			exit(1)
 		}
 		do {
-			try GeneratedFileWriter.write(output, to: URL(filePath: outputPath))
+			let outputURL = URL(filePath: outputPath)
+			try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+			try GeneratedFileWriter.write(output, to: outputURL)
 		} catch {
 			fail("cannot write \(outputPath): \(error)")
 		}
 	}
 
 	private static func fail(_ message: String) -> Never {
-		fputs("error: \(message)\n", stderr)
+		printError("error: \(message)")
 		exit(1)
+	}
+
+	private static func printError(_ message: String) {
+		FileHandle.standardError.write(Data((message + "\n").utf8))
 	}
 }
