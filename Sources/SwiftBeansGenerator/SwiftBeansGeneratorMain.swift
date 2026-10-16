@@ -94,6 +94,11 @@ struct SwiftBeansGeneratorMain {
 		}
 	}
 
+	/// `stderr` is not concurrency-safe to reference on Linux (Swift 6 mode).
+	private static func printError(_ message: String) {
+		FileHandle.standardError.write(Data((message + "\n").utf8))
+	}
+
 	private static func fail(_ message: String) -> Never {
 		printError("error: \(message)")
 		exit(1)

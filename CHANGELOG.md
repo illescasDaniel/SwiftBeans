@@ -7,6 +7,11 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 ### Added
 
 - GitHub Actions CI: `swift test`, example app tests on macOS and an iOS Simulator build.
+- Build warning `bean.directCall` when a `@Bean` body or `@Service` initializer calls another `@Bean` directly instead of taking it as a parameter (see `specs/inter-bean-call-diagnostic/SPEC.md`).
+
+### Fixed
+
+- Generator executable builds on Linux in Swift 6 mode (no direct `stderr` reference).
 
 ### Fixed
 

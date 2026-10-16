@@ -280,7 +280,8 @@ A provider whose selected initializer or `@Bean` method has at least one paramet
 	- Cycle → an error at the first provider in the cycle (by sort order) with a `note:` at each other provider in it.
 	- Accessor-name collision → an error at each provider.
 	- Unsupported declaration or key → the attribute or type that is unsupported.
-4. **Misuse visible from one declaration is diagnosed by the macro** at that declaration (e.g. `@Bean` not `static`, no return type, `throws` / `async`; `@Service` on a protocol or enum; a non-literal `scope:`), so Xcode shows it inline while editing. The generator does not report the same problem a second time.
+4. Warnings use the same format with `warning:` and never fail the build. The only warning is `bean.directCall` (a `@Bean` / `@Service` initializer body calling another `@Bean` directly), specified in [`specs/inter-bean-call-diagnostic/SPEC.md`](../inter-bean-call-diagnostic/SPEC.md).
+5. **Misuse visible from one declaration is diagnosed by the macro** at that declaration (e.g. `@Bean` not `static`, no return type, `throws` / `async`; `@Service` on a protocol or enum; a non-literal `scope:`), so Xcode shows it inline while editing. The generator does not report the same problem a second time.
 
 #### Generated file
 

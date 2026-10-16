@@ -182,6 +182,7 @@ package enum SwiftBeansGeneration {
 
 		let (providers, resolverDiagnostics) = ProviderResolver.resolve(files)
 		diagnostics += resolverDiagnostics
+		diagnostics += DirectCallAnalyzer.analyze(files)
 		// A target without a root context (e.g. a feature module) generates nothing to validate.
 		if contexts.count == 1 {
 			diagnostics += GraphValidator.validate(providers)

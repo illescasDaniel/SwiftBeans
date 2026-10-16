@@ -15,6 +15,22 @@ struct ScannedFile {
 	/// `@Assisted` on stored properties of scanned types (parameters only; SPEC Assisted providers, rule 7).
 	var assistedPropertyLocations: [SourcePosition] = []
 	var imports: [ImportRecord] = []
+	/// Initializer bodies of every scanned type (and extension), for the inter-bean call diagnostic.
+	var initializerBodies: [InitializerBody] = []
+}
+
+/// A call written as `name(...)` or `base.name(...)`.
+struct CallSite {
+	/// The spelled base (`AppConfiguration`, `Self`), `nil` for a bare call.
+	var base: String?
+	var name: String
+	var location: SourcePosition
+}
+
+struct InitializerBody {
+	/// Qualified name of the declaring (or extended) type.
+	var typeName: String
+	var calls: [CallSite]
 }
 
 struct ContextDecl {
@@ -108,6 +124,8 @@ struct BeanDecl {
 	var returnTypeLocation: SourcePosition
 	var returnSpelling: String
 	var location: SourcePosition
+	/// Calls in the function body, for the inter-bean call diagnostic.
+	var bodyCalls: [CallSite]
 }
 
 struct ImportRecord: Hashable {
@@ -195,6 +213,7 @@ struct DeclarationScanner {
 				extendedName: name,
 				initializers: initializers(in: extensionDecl.memberBlock.members)
 			))
+			recordInitializerBodies(extensionDecl.memberBlock.members, typeName: name)
 			let isPublic = extensionDecl.modifiers.contains { isPublicModifier($0) }
 			walkMembers(extensionDecl.memberBlock.members, enclosing: .extension(name, isPublic: isPublic), conditional: conditional)
 		} else if let function = decl.as(FunctionDeclSyntax.self),
@@ -252,6 +271,7 @@ struct DeclarationScanner {
 			location: location
 		))
 		recordAssistedProperties(members)
+		recordInitializerBodies(members, typeName: name)
 		walkMembers(members, enclosing: .type(name), conditional: conditional)
 	}
 
@@ -319,8 +339,34 @@ struct DeclarationScanner {
 			returnKey: KeyNormalization.key(for: returnType),
 			returnTypeLocation: position(returnType),
 			returnSpelling: returnType.trimmedDescription,
-			location: position(function)
+			location: position(function),
+			bodyCalls: function.body.map(calls(in:)) ?? []
 		))
+	}
+
+	private mutating func recordInitializerBodies(_ members: MemberBlockItemListSyntax, typeName: String) {
+		for member in members {
+			guard let initializer = member.decl.as(InitializerDeclSyntax.self), let body = initializer.body else { continue }
+			let calls = calls(in: body)
+			if !calls.isEmpty {
+				result.initializerBodies.append(InitializerBody(typeName: typeName, calls: calls))
+			}
+		}
+	}
+
+	private func calls(in body: CodeBlockSyntax) -> [CallSite] {
+		let collector = CallCollector(viewMode: .sourceAccurate)
+		collector.walk(body)
+		return collector.calls.compactMap { call in
+			let location = position(call)
+			if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+				return CallSite(base: nil, name: reference.baseName.text, location: location)
+			}
+			if let member = call.calledExpression.as(MemberAccessExprSyntax.self), let base = member.base {
+				return CallSite(base: base.trimmedDescription, name: member.declName.baseName.text, location: location)
+			}
+			return nil
+		}
 	}
 
 	/// The `scope:` argument, when it is a supported literal (a non-literal one is the macro's error).
@@ -516,4 +562,20 @@ struct ConditionTerm {
 		if terms.count == 1, !terms[0].negated { return terms[0].expression }
 		return terms.map { $0.negated ? "!(\($0.expression))" : "(\($0.expression))" }.joined(separator: " && ")
 	}
+}
+
+/// Collects call expressions, without entering nested type declarations.
+private final class CallCollector: SyntaxVisitor {
+	private(set) var calls: [FunctionCallExprSyntax] = []
+
+	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+		calls.append(node)
+		return .visitChildren
+	}
+
+	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
+	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind { .skipChildren }
 }
