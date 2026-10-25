@@ -3,6 +3,7 @@ import SwiftBeansSyntaxRules
 /// One accessor's worth of wiring.
 struct BeanProvider {
 	enum Construction: Equatable {
+		case contextInput(propertyName: String)
 		/// `TypeName(args)`
 		case initializer(typeName: String)
 		/// `TypeName.method(args)`

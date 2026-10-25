@@ -173,10 +173,13 @@ package enum SwiftBeansGeneration {
 	}
 
 	/// Scans, validates and generates from in-memory files.
-	package static func generate(sources: [SourceFile]) -> GenerationResult {
+	package static func generate(sources: [SourceFile], onParse: ((SourceFile) -> Void)? = nil) -> GenerationResult {
 		let files = sources
 			.sorted { $0.path < $1.path }
-			.map(DeclarationScanner.scan)
+			.map { source in
+				onParse?(source)
+				return DeclarationScanner.scan(source)
+			}
 
 		var diagnostics: [GeneratorDiagnostic] = []
 		let contexts = files.filter { $0.source.origin == .target }.flatMap(\.contexts)
@@ -194,6 +197,9 @@ package enum SwiftBeansGeneration {
 		let (providers, resolverDiagnostics) = ProviderResolver.resolve(files)
 		diagnostics += resolverDiagnostics
 		diagnostics += DirectCallAnalyzer.analyze(files)
+		if files.contains(where: \.hasContextFeatures) {
+			return ContextGraph.generate(files: files, providers: providers, initialDiagnostics: diagnostics)
+		}
 		// A target without a root context (e.g. a feature module) generates nothing to validate.
 		if contexts.count == 1 {
 			diagnostics += GraphValidator.validate(providers)

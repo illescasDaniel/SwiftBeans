@@ -9,7 +9,7 @@ struct ItemDetailViewModelTests {
 	func `Given FakeAppContext with stub repo When refresh Then refreshes from repository`() async {
 		let seed = Item(id: 7, title: "Seed", detail: "Old")
 		let refreshed = Item(id: 7, title: "Fresh", detail: "New body")
-		let context = FakeAppContext(itemRepository: StubItemRepository(items: [refreshed]))
+		let context = FakeLoggedInContext(parent: FakeAppContext(itemRepository: StubItemRepository(items: [refreshed])))
 		let viewModel = context.itemDetailViewModel(item: seed)
 		#expect(viewModel.item == seed)
 		#expect(viewModel.state == .idle)
@@ -22,7 +22,7 @@ struct ItemDetailViewModelTests {
 
 	@Test
 	func `Given FakeAppContext default fakes When refresh post 1 Then uses fake JSONPlaceholder data`() async {
-		let context = FakeAppContext()
+		let context = FakeLoggedInContext(parent: FakeAppContext())
 		let viewModel = context.itemDetailViewModel(item: Item(id: 1, title: "Seed", detail: "Old"))
 
 		await viewModel.refresh()
@@ -35,7 +35,7 @@ struct ItemDetailViewModelTests {
 	@Test
 	func `Given failing repository When refresh Then state is failed and seed item is kept`() async {
 		let seed = Item(id: 7, title: "Seed", detail: "Old")
-		let context = FakeAppContext(itemRepository: StubItemRepository(items: [], shouldThrow: true))
+		let context = FakeLoggedInContext(parent: FakeAppContext(itemRepository: StubItemRepository(items: [], shouldThrow: true)))
 		let viewModel = context.itemDetailViewModel(item: seed)
 
 		await viewModel.refresh()

@@ -2,7 +2,7 @@
 ///
 /// Keys are `(type, qualifier)`. Every check iterates providers sorted by `(key, location)`, never dictionary order.
 enum GraphValidator {
-	static func validate(_ providers: [BeanProvider]) -> [GeneratorDiagnostic] {
+	static func validate(_ providers: [BeanProvider], consumerKeys: Set<BeanKey>? = nil, accessorNames: [BeanKey: String] = [:], bindings: [SourcePosition: ResolvedParameterBinding]? = nil) -> [GeneratorDiagnostic] {
 		let providers = providers.sorted { ($0.key, $0.location) < ($1.key, $1.location) }
 		var diagnostics: [GeneratorDiagnostic] = []
 		var byKey: [BeanKey: [Int]] = [:]
@@ -25,8 +25,8 @@ enum GraphValidator {
 
 		// 2. Accessor-name collisions between different keys (a qualified key is never renamed to avoid one).
 		var keysByAccessor: [String: [BeanKey]] = [:]
-		for key in byKey.keys.sorted() {
-			keysByAccessor[key.accessorName, default: []].append(key)
+		for key in byKey.keys.sorted() where consumerKeys?.contains(key) ?? true {
+			keysByAccessor[accessorNames[key] ?? key.accessorName, default: []].append(key)
 		}
 		for accessor in keysByAccessor.keys.sorted() where keysByAccessor[accessor]!.count > 1 {
 			let keys = keysByAccessor[accessor]!
@@ -60,9 +60,13 @@ enum GraphValidator {
 
 		// 3. Missing dependencies (a `[E]` parameter may be supplied by the members of `E`).
 		let injection = ParameterInjection(providers)
-		for (index, provider) in providers.enumerated() {
+		func plannedInjection(_ parameter: BeanParameter, _ consumer: Int) -> Injection? {
+			if let binding = bindings?[parameter.location] { return binding.injection }
+			return injection.injection(for: parameter, of: consumer)
+		}
+		for (index, provider) in providers.enumerated() where consumerKeys?.contains(provider.key) ?? true {
 			for parameter in provider.parameters {
-				guard let key = parameter.key, !parameter.hasDefault, injection.injection(for: parameter, of: index) == nil else { continue }
+				guard let key = parameter.key, !parameter.hasDefault, plannedInjection(parameter, index) == nil else { continue }
 				// An unqualified parameter never picks a named provider, even a single one.
 				let named = key.qualifier == nil ? providers.filter { $0.key.type == key.type } : []
 				if !named.isEmpty {
@@ -92,10 +96,10 @@ enum GraphValidator {
 
 		// 3b. Factory parameters: the return type matches the unqualified provider of that type.
 		let firstByType = { (type: TypeKey) in byKey[BeanKey(type)]?.first.map { providers[$0] } }
-		for provider in providers {
+		for provider in providers where consumerKeys?.contains(provider.key) ?? true {
 			for parameter in provider.parameters {
 				guard let factory = parameter.factory, !parameter.hasDefault else { continue }
-				switch FactoryBinding.resolve(factory, providersByKey: firstByType) {
+				switch bindings?[parameter.location]?.factory ?? FactoryBinding.resolve(factory, providersByKey: firstByType) {
 				case .deferred, .assisted:
 					break
 				case .missing:
@@ -119,7 +123,7 @@ enum GraphValidator {
 		}
 
 		// 4. Assisted keys are not injectable: the graph cannot supply runtime arguments.
-		for provider in providers {
+		for provider in providers where consumerKeys?.contains(provider.key) ?? true {
 			for parameter in provider.parameters where !parameter.hasDefault {
 				guard let key = parameter.key, let indices = byKey[key], indices.allSatisfy({ providers[$0].isAssisted }) else { continue }
 				let assisted = providers[indices[0]]
@@ -134,10 +138,11 @@ enum GraphValidator {
 		}
 
 		// 5. Cycles over injected edges (assisted never; factories lazy; collections depend on every member).
-		let edges = providers.indices.map { index in
-			providers[index].parameters.flatMap { parameter -> [Int] in
+		let edges = providers.indices.map { index -> [Int] in
+			guard consumerKeys?.contains(providers[index].key) ?? true else { return [] }
+			return providers[index].parameters.flatMap { parameter -> [Int] in
 				if parameter.factory != nil { return [] }
-				switch injection.injection(for: parameter, of: index) {
+				switch plannedInjection(parameter, index) {
 				case .key(let key):
 					return byKey[key].flatMap { providers[$0[0]].isAssisted ? nil : [$0[0]] } ?? []
 				case .collection(let members):

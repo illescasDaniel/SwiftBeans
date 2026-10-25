@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// View: depends only on `ItemListViewModel`; navigation goes through `AppCoordinator`.
+/// View: depends only on `ItemListViewModel`; navigation goes through `LoggedInCoordinator`.
 struct ItemListView: View {
-	@Environment(AppCoordinator.self) private var coordinator
+	@Environment(LoggedInCoordinator.self) private var coordinator
 	@State private var viewModel: ItemListViewModel
 
 	init(viewModel: ItemListViewModel) {
@@ -77,8 +77,8 @@ struct ItemListView: View {
 
 #if DEBUG
 #Preview("ItemListView") {
-	let context = FakeAppContext()
-	PreviewRootView(coordinator: context.appCoordinator) {
+	let context = FakeLoggedInContext(parent: FakeAppContext())
+	PreviewRootView(coordinator: context.loggedInCoordinator) {
 		ItemListView(viewModel: context.itemListViewModel)
 	}
 }

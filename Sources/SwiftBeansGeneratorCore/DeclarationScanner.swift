@@ -6,6 +6,11 @@ import SwiftSyntax
 struct ScannedFile {
 	var source: SourceFile
 	var contexts: [ContextDecl] = []
+	var children: [ChildContextDecl] = []
+	var owners: [SourcePosition: OwnerReference] = [:]
+	var configurationOwners: [String: OwnerReference] = [:]
+	var contextDiagnostics: [GeneratorDiagnostic] = []
+	var hasContextFeatures = false
 	var types: [TypeDecl] = []
 	var extensions: [ExtensionDecl] = []
 	var services: [ServiceDecl] = []
@@ -41,6 +46,7 @@ struct ContextDecl {
 	/// Last name component, used for the protocol name.
 	var simpleName: String
 	var location: SourcePosition
+	var isMainActor = false
 }
 
 enum TypeKind {
@@ -248,6 +254,12 @@ struct DeclarationScanner {
 			recordInitializerBodies(extensionDecl.memberBlock.members, typeName: name)
 			let isPublic = extensionDecl.modifiers.contains { isPublicModifier($0) }
 			walkMembers(extensionDecl.memberBlock.members, enclosing: .extension(name, isPublic: isPublic), conditional: conditional)
+		} else if let variable = decl.as(VariableDeclSyntax.self),
+		          SwiftBeansSyntaxRules.find(.contextInput, in: variable.attributes) != nil {
+			result.hasContextFeatures = true
+			if !result.children.contains(where: { $0.context.name == enclosing?.name }) {
+				report(SwiftBeansSyntaxRules.contextInputViolations(variable, inChild: false))
+			}
 		} else if let function = decl.as(FunctionDeclSyntax.self),
 		          let attribute = SwiftBeansSyntaxRules.find(.bean, in: function.attributes),
 		          let enclosing
@@ -271,17 +283,25 @@ struct DeclarationScanner {
 		let name = enclosing.map { "\($0.name).\(simpleName)" } ?? simpleName
 		let attributes = group.attributes
 		let context = SwiftBeansSyntaxRules.find(.applicationContext, in: attributes)
+		let child = SwiftBeansSyntaxRules.find(.childContext, in: attributes)
 		let service = SwiftBeansSyntaxRules.find(.service, in: attributes)
 		let configuration = SwiftBeansSyntaxRules.find(.configuration, in: attributes)
 		let location = position(decl)
 
-		if conditional, context != nil || service != nil || configuration != nil {
+		if conditional, context != nil || child != nil || service != nil || configuration != nil {
 			result.conditionalDecls.append(location)
 		} else {
 			if let context, SwiftBeansSyntaxRules.applicationContextViolations(decl, attribute: context).isEmpty {
-				result.contexts.append(ContextDecl(name: name, simpleName: simpleName, location: location))
+				result.contexts.append(ContextDecl(name: name, simpleName: simpleName, location: location, isMainActor: SwiftBeansSyntaxRules.isMainActor(attributes)))
+			}
+			if let child {
+				recordChild(group, decl: decl, attribute: child, name: name, simpleName: simpleName, location: location)
+			}
+			if let configuration, let owner = recordOwner(configuration, scope: enclosing?.name ?? "") {
+				result.configurationOwners[name] = owner
 			}
 			if let service {
+				if let owner = recordOwner(service, scope: enclosing?.name ?? "") { result.owners[location] = owner }
 				recordService(decl, attribute: service, typeName: name, location: location)
 			}
 		}
@@ -306,6 +326,48 @@ struct DeclarationScanner {
 		recordMarkerProperties(members)
 		recordInitializerBodies(members, typeName: name)
 		walkMembers(members, enclosing: .type(name), conditional: conditional)
+	}
+
+	private mutating func report(_ violations: [Violation]) {
+		for violation in violations {
+			result.contextDiagnostics.append(GeneratorDiagnostic(id: violation.id, location: position(violation.node), message: violation.message))
+		}
+	}
+
+	private mutating func recordOwner(_ attribute: AttributeSyntax, scope: String) -> OwnerReference? {
+		guard let expression = SwiftBeansSyntaxRules.argument("in", of: attribute) else { return nil }
+		result.hasContextFeatures = true
+		switch SwiftBeansSyntaxRules.owner(of: attribute) {
+		case .success(let name): return name.map { OwnerReference(name: $0, lexicalScope: scope, location: position(expression)) }
+		case .failure(let violation): report([violation]); return nil
+		}
+	}
+
+	private mutating func recordChild(_ group: some DeclGroupSyntax, decl: DeclSyntax, attribute: AttributeSyntax, name: String, simpleName: String, location: SourcePosition) {
+		result.hasContextFeatures = true
+		let violations = SwiftBeansSyntaxRules.childContextViolations(decl, attribute: attribute)
+		report(violations)
+		guard violations.isEmpty,
+		      let expression = SwiftBeansSyntaxRules.argument("of", of: attribute),
+		      let parent = SwiftBeansSyntaxRules.typeLiteral(expression) else { return }
+		var inputs: [ContextInputDecl] = []
+		for member in group.memberBlock.members {
+			guard let variable = member.decl.as(VariableDeclSyntax.self),
+			      SwiftBeansSyntaxRules.find(.contextInput, in: variable.attributes) != nil,
+			      let binding = variable.bindings.first, let type = binding.typeAnnotation?.type else { continue }
+			switch KeyNormalization.key(for: type) {
+			case .success(let normalized):
+				inputs.append(ContextInputDecl(name: binding.pattern.trimmedDescription, typeSpelling: type.trimmedDescription, key: BeanKey(normalized.key), spelledWithAny: normalized.spelledWithAny, location: position(binding)))
+			case .failure(let reason):
+				result.contextDiagnostics.append(GeneratorDiagnostic(id: "context.invalidInput", location: position(type), message: "unsupported context input: \(reason)"))
+			}
+		}
+		result.children.append(ChildContextDecl(
+			context: ContextDecl(name: name, simpleName: simpleName, location: location, isMainActor: SwiftBeansSyntaxRules.isMainActor(group.attributes)),
+			parent: OwnerReference(name: parent, lexicalScope: name.components(separatedBy: ".").dropLast().joined(separator: "."), location: position(expression)),
+			teardown: (try? SwiftBeansSyntaxRules.teardown(of: attribute).get()) ?? .arc,
+			inputs: inputs
+		))
 	}
 
 	/// `@Assisted` and `@Qualifier` belong on parameters; on a stored property they are errors.
@@ -361,6 +423,7 @@ struct DeclarationScanner {
 		else {
 			return
 		}
+		if let owner = recordOwner(attribute, scope: enclosing.name) { result.owners[position(function)] = owner }
 		var isPublic = function.modifiers.contains { isPublicModifier($0) }
 		if case .extension(_, let extensionIsPublic) = enclosing, extensionIsPublic,
 		   !function.modifiers.contains(where: { isRestrictingModifier($0) })

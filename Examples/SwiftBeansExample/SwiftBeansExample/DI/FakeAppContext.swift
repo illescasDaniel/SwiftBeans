@@ -29,21 +29,8 @@ final class FakeAppContext: AppContextProtocol {
 	let factoryFeatureNote: FactoryFeatureNote
 	let qualifierFeatureNote: QualifierFeatureNote
 
-	var itemListViewModel: ItemListViewModel {
-		ItemListViewModel(fetchItems: fetchItemsUseCase)
-	}
-
-	func itemDetailViewModel(item: Item) -> ItemDetailViewModel {
-		ItemDetailViewModel(repository: itemRepository, item: item)
-	}
-
-	var appCoordinator: AppCoordinator {
-		AppCoordinator(
-			makeItemList: { self.itemListViewModel },
-			makeItemDetail: { self.itemDetailViewModel(item: $0) },
-			makeFeaturesDemo: { self.featuresDemoViewModel }
-		)
-	}
+	let authenticationService: AuthenticationService
+	var loginViewModel: LoginViewModel { LoginViewModel(authentication: authenticationService) }
 
 	var featuresDemoViewModel: FeaturesDemoViewModel {
 		FeaturesDemoViewModel(
@@ -62,6 +49,7 @@ final class FakeAppContext: AppContextProtocol {
 		itemRepository: ItemRepository? = nil,
 		greeter: (any Greeter)? = nil
 	) {
+		self.authenticationService = AuthenticationService()
 		let handler = httpDataRequestHandler ?? FakeJSONPlaceholderDataHandler()
 		let client = HTTPClientImpl(httpDataRequestHandler: handler)
 		let decoder = AppConfiguration.decoder()

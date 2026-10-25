@@ -1,61 +1,67 @@
 import SwiftUI
 
-struct AppNavigationView: View {
-	@Environment(AppCoordinator.self) private var coordinator
+struct LoggedInNavigationView: View {
+	@Environment(LoggedInCoordinator.self) private var coordinator
+	@Environment(AppCoordinator.self) private var app
 
 	var body: some View {
 		@Bindable var coordinator = coordinator
-		NavigationStack(path: $coordinator.path) {
-			coordinator.build(.itemList)
-				.navigationDestination(for: Route.self) { route in
-					coordinator.build(route)
-				}
+		TabView(selection: $coordinator.selectedTab) {
+			NavigationStack(path: $coordinator.path) {
+				coordinator.build(.itemList)
+					.navigationDestination(for: Route.self) { coordinator.build($0) }
+			}
+			.tabItem { Label("Items", systemImage: "list.bullet") }
+			.tag(LoggedInTab.items)
+			NavigationStack {
+				coordinator.build(.user)
+					.toolbar {
+						Button("Log Out") { Task { await app.logOut() } }
+						Button("Expire Session") { Task { await app.sessionExpired() } }
+					}
+			}
+			.tabItem { Label("User", systemImage: "person") }
+			.tag(LoggedInTab.user)
 		}
 	}
 }
 
 struct AppRootView: View {
 	@Bindable var coordinator: AppCoordinator
-
 	var body: some View {
-		AppNavigationView()
-			.environment(coordinator)
+		Group {
+			if let flow = coordinator.loggedIn {
+				LoggedInNavigationView().environment(flow.coordinator).id(flow.id)
+			} else {
+				NavigationStack { coordinator.build(.login) }.disabled(coordinator.isEndingSession)
+			}
+		}
+		.environment(coordinator)
 	}
 }
 
 #if DEBUG
-/// Preview stand-in for `AppNavigationView`. `root` is the initial screen; pushes still go through `coordinator.path`.
-struct PreviewNavigationView<Root: View>: View {
-	@Environment(AppCoordinator.self) private var coordinator
-	@ViewBuilder var root: () -> Root
-
-	var body: some View {
-		@Bindable var coordinator = coordinator
-		NavigationStack(path: $coordinator.path) {
-			root()
-				.navigationDestination(for: Route.self) { route in
-					coordinator.build(route)
-				}
+	struct PreviewNavigationView<Root: View>: View {
+		@Environment(LoggedInCoordinator.self) private var coordinator
+		@ViewBuilder var root: () -> Root
+		var body: some View {
+			@Bindable var coordinator = coordinator
+			NavigationStack(path: $coordinator.path) {
+				root().navigationDestination(for: Route.self) { coordinator.build($0) }
+			}
 		}
 	}
-}
 
-/// Preview stand-in for `AppRootView`. The `@main` app keeps using `AppRootView`.
-struct PreviewRootView<Root: View>: View {
-	@Bindable var coordinator: AppCoordinator
-	@ViewBuilder var root: () -> Root
-
-	var body: some View {
-		PreviewNavigationView(root: root)
-			.environment(coordinator)
+	struct PreviewRootView<Root: View>: View {
+		@Bindable var coordinator: LoggedInCoordinator
+		@ViewBuilder var root: () -> Root
+		var body: some View { PreviewNavigationView(root: root).environment(coordinator) }
 	}
-}
 
-#Preview("Navigation") {
-	let context = FakeAppContext()
-	let coordinator = context.appCoordinator
-	PreviewRootView(coordinator: coordinator) {
-		coordinator.build(.itemList)
+	#Preview("Navigation") {
+		let context = FakeLoggedInContext(parent: FakeAppContext())
+		PreviewRootView(coordinator: context.loggedInCoordinator) {
+			context.loggedInCoordinator.build(.itemList)
+		}
 	}
-}
 #endif

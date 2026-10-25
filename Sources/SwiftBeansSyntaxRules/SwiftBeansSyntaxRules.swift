@@ -13,6 +13,8 @@ public enum SwiftBeansAttribute: String, Sendable, CaseIterable {
 	case bean = "Bean"
 	case service = "Service"
 	case inject = "Inject"
+	case childContext = "ChildContext"
+	case contextInput = "ContextInput"
 }
 
 /// Build-time value of a `scope:` argument.
@@ -210,6 +212,9 @@ public enum SwiftBeansSyntaxRules {
 		if case .failure(let violation) = named(of: attribute) {
 			violations.append(violation)
 		}
+		if case .failure(let violation) = owner(of: attribute) {
+			violations.append(violation)
+		}
 		return violations
 	}
 
@@ -238,6 +243,9 @@ public enum SwiftBeansSyntaxRules {
 		if case .failure(let violation) = named(of: attribute) {
 			violations.append(violation)
 		}
+		if case .failure(let violation) = owner(of: attribute) {
+			violations.append(violation)
+		}
 		return violations
 	}
 
@@ -245,6 +253,7 @@ public enum SwiftBeansSyntaxRules {
 		if declaration.is(EnumDeclSyntax.self) || declaration.is(StructDeclSyntax.self)
 			|| declaration.is(ClassDeclSyntax.self) || declaration.is(ActorDeclSyntax.self)
 		{
+			if case .failure(let violation) = owner(of: attribute) { return [violation] }
 			return []
 		}
 		return [Violation(

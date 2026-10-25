@@ -4,6 +4,13 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+
+- Child contexts: `@ChildContext(of:)`, stored `@ContextInput` values, `in:` ownership on services/beans/configurations, per-child singleton caches, parent-protocol delegation and positioned visibility/conflict diagnostics. Existing root-only output stays byte-identical.
+- Optional MainActor managed teardown: `ChildContextTeardown`, `ContextCleanup` and generated `close() async`, with identity-deduplicated singleton cleanup, shared completion and guarded resolution after closing begins. ARC remains the default.
+- Owner-aware child graph dumps and a login-required example with a root flow owner, transient child coordinator, user tab, session work cleanup, stale-login protection and hand-written child fakes.
+- Plugin-backed child integration tests, strict-concurrency generated-source fixtures, isolated lifecycle exit tests and root-output/resource-budget checks.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

@@ -8,9 +8,11 @@ import SwiftBeans
 /// - `itemRepository` → `JSONPlaceholderItemRepository` as `ItemRepository`
 /// - `fetchItemsUseCase`
 /// - `[any FeatureNote]` on the features demo, and named `TagSource`s
-/// - transient view models, and `appCoordinator` (receives them as factories)
+/// - authentication and transient login/features models
+/// `LoggedInContext` owns session repositories, screen models and its transient coordinator.
 ///
 /// A successful build also writes `SwiftBeansGraph.md` and `SwiftBeansGraph.dot`
 /// next to `SwiftBeansGenerated.swift` in the plugin output directory.
 @ApplicationContext
+@MainActor
 final class AppContext {}

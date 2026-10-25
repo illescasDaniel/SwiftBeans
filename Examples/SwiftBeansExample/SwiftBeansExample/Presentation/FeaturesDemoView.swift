@@ -78,7 +78,7 @@ struct FeaturesDemoView: View {
 			}
 
 			Section("Factories") {
-				Text("This screen's view model came from `() -> FeaturesDemoViewModel`. `AppCoordinator` also takes `() -> ItemListViewModel` and `(Item) -> ItemDetailViewModel`, and it never holds the context.")
+				Text("This screen's view model came from `() -> FeaturesDemoViewModel`. `LoggedInCoordinator` also takes `() -> ItemListViewModel` and `(Item) -> ItemDetailViewModel`, and it never holds the context.")
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 			}
@@ -120,8 +120,8 @@ struct FeaturesDemoView: View {
 
 #if DEBUG
 #Preview("FeaturesDemoView") {
-	let context = FakeAppContext()
-	PreviewRootView(coordinator: context.appCoordinator) {
+	let context = FakeLoggedInContext(parent: FakeAppContext())
+	PreviewRootView(coordinator: context.loggedInCoordinator) {
 		FeaturesDemoView(viewModel: context.featuresDemoViewModel)
 	}
 }

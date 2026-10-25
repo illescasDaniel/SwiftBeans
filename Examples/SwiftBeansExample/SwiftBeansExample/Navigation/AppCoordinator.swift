@@ -1,45 +1,64 @@
+import Foundation
 import Observation
-import SwiftBeans
 import SwiftUI
 
-/// Builds screens from injected factories, so it never sees the context:
-/// `() -> T` re-reads a transient accessor, `(Item) -> T` calls an assisted accessor.
-/// Transient: factories capture the context, so a singleton holding them would keep it alive.
-@Service(scope: .transient)
 @Observable
+@MainActor
 final class AppCoordinator {
-	var path = NavigationPath()
-	private let makeItemList: () -> ItemListViewModel
-	private let makeItemDetail: (Item) -> ItemDetailViewModel
-	private let makeFeaturesDemo: () -> FeaturesDemoViewModel
+	private let makeLogin: @MainActor () -> LoginViewModel
+	private let makeLoggedInFlow: @MainActor (SessionCredentials) -> LoggedInFlow
+	private(set) var loggedIn: LoggedInFlow?
+	private(set) var isEndingSession = false
+	private var attempt: UUID?
+	private var loginTask: Task<SessionCredentials?, Never>?
+	private var pendingModel: LoginViewModel?
 
 	init(
-		makeItemList: @escaping () -> ItemListViewModel,
-		makeItemDetail: @escaping (Item) -> ItemDetailViewModel,
-		makeFeaturesDemo: @escaping () -> FeaturesDemoViewModel
+		makeLogin: @escaping @MainActor () -> LoginViewModel,
+		makeLoggedInFlow: @escaping @MainActor (SessionCredentials) -> LoggedInFlow
 	) {
-		self.makeItemList = makeItemList
-		self.makeItemDetail = makeItemDetail
-		self.makeFeaturesDemo = makeFeaturesDemo
+		self.makeLogin = makeLogin
+		self.makeLoggedInFlow = makeLoggedInFlow
 	}
 
-	func push(_ route: Route) {
-		path.append(route)
+	func signIn(using model: LoginViewModel) async {
+		guard loggedIn == nil, !isEndingSession else { return }
+		pendingModel?.cancelAuthentication()
+		loginTask?.cancel()
+		let identity = UUID()
+		attempt = identity
+		pendingModel = model
+		let operation = Task { await model.authenticate() }
+		loginTask = operation
+		let credentials = await operation.value
+		guard attempt == identity else { return }
+		attempt = nil
+		pendingModel = nil
+		loginTask = nil
+		guard !isEndingSession, loggedIn == nil, let credentials else { return }
+		loggedIn = makeLoggedInFlow(credentials)
 	}
 
-	func resetNavigation() {
-		path = NavigationPath()
+	func logOut() async {
+		attempt = nil
+		pendingModel?.cancelAuthentication()
+		pendingModel = nil
+		loginTask?.cancel()
+		loginTask = nil
+		guard let flow = loggedIn else { return }
+		isEndingSession = true
+		loggedIn = nil
+		await flow.close()
+		isEndingSession = false
 	}
+	func sessionExpired() async { await logOut() }
 
-	@ViewBuilder
-	func build(_ route: Route) -> some View {
+	@ViewBuilder func build(_ route: AppRoute) -> some View {
 		switch route {
-		case .itemList:
-			ItemListView(viewModel: makeItemList())
-		case .itemDetail(let item):
-			ItemDetailView(viewModel: makeItemDetail(item))
-		case .featuresDemo:
-			FeaturesDemoView(viewModel: makeFeaturesDemo())
+		case .login:
+			LoginView(viewModel: makeLogin()) { [weak self] model in await self?.signIn(using: model) }
 		}
 	}
 }
+
+enum AppRoute { case login }

@@ -16,7 +16,7 @@ struct FakeAppContextTests {
 
 	@Test
 	func `Given default FakeAppContext When resolving transient VMs Then distinct instances`() {
-		let context = FakeAppContext()
+		let context = FakeLoggedInContext(parent: FakeAppContext())
 		let item = Item(id: 1, title: "Title", detail: "Body")
 		#expect(context.itemListViewModel !== context.itemListViewModel)
 		#expect(context.itemDetailViewModel(item: item) !== context.itemDetailViewModel(item: item))

@@ -1,5 +1,10 @@
 # Progress
 
+## SDD workflow refresh (2026-10-25)
+
+- [x] Updated `.cursor/skills/sdd-feature/` from upstream `illescasDaniel/sdd-feature-skill` commit `5443fe57ff5f0fef25d8a76f75dae64953bb9e7b` (2026-10-22), adapting design/spec/architecture gates, templates, structural checks, and independent grading to SwiftBeans package boundaries
+- [x] Aligned `AGENTS.md`, `.cursor/rules/sdd.mdc`, and the SwiftBeans SDD playbooks
+
 ## Bootstrap (2026-10-14)
 
 ### Done
@@ -100,12 +105,19 @@ Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 â
 - [x] Graph dump (`specs/graph-dump/SPEC.md`): `SwiftBeansGraph.md` + `SwiftBeansGraph.dot`. Future: `.swiftbeans.yml` toggle
 - [x] Local-package scan refresh: generator re-resolves config + local packages every run from a `GeneratorRequest`; plugin declares folders as inputs
 - [x] Inter-bean call diagnostic (`specs/inter-bean-call-diagnostic/SPEC.md`): warning `bean.directCall`
-- [x] Child contexts Phase 1: `specs/child-contexts/SPEC.md` drafted (+ proposed `ARCHITECTURE.md` stub); awaiting approval
+- [x] Child contexts original Phase 1 draft and architecture stub (2026-10-15); superseded by the approved 2026-10-25 spec and Phase 2 proposal below
 - [x] Integration merge on `feature/improvements` + `swift test` green (201 tests / 19 suites, 2026-10-16). Example app combined check still optional.
 - [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
 - [x] Example app: qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`), collection injection (`[any FeatureNote]`), factories already on `AppCoordinator`. macOS `xcodebuild test` green (2026-10-16). Duplicate `printError` in `SwiftBeansGeneratorMain` fixed in the same pass (`swift test` does not build the generator executable)
 - [x] Example previews use `PreviewRootView` (debug-only, custom root) so `coordinator.path` is bound; `AppRootView` is constructed only from `@main` (2026-10-16)
-- [ ] Child contexts: approval, Phase 2 contracts, tests, implementation (Phases 0 / A / Bâ€“D per the spec; see open questions first)
+- [x] Child contexts system-design draft (2026-10-25): `design/child-contexts/DESIGN.md` proposes coordinator-owned login flow, transient child coordinator, optional managed teardown and A1/A2 delivery. This draft was followed by the approved design/spec/architecture and completed delivery recorded below.
+- [x] Child contexts Phase 0 design approved in chat (2026-10-25): coordinator-owned flow and optional managed teardown, including MainActor restriction and resolution-after-close precondition.
+- [x] Child contexts Phase 1 decisions confirmed and spec revised (2026-10-25): approved resource defaults, managed cleanup/lifetime contracts, factory/qualifier/collection/dump composition, coordinator login flow and 64 BDD scenarios. Structural spec checker passes.
+- [x] Child contexts spec explicitly approved in chat (2026-10-25), including managed teardown.
+- [x] Child contexts Phase 2 proposal drafted (2026-10-25): public runtime/macro signatures, separate managed registry, generator ownership/injection plans, identity witnesses, example composition and mapping for all 64 scenarios. Nonproduction contract snapshots type-check under Swift 6.4 strict concurrency with ordinary/MainActor defaults; macro signatures parse. Architecture subsequently approved in chat.
+- [x] Child contexts architecture/contracts explicitly approved in chat (2026-10-25).
+- [x] Child contexts runtime/macros/generator and coordinator login example implemented with initial failing tests, generated-source compiler fixtures, 20 lifecycle exit cases and plugin-backed integration coverage; full package and both example platform gates have passed before final validation refinements (2026-10-25).
+- [x] Child contexts A1/A2 complete (2026-10-25): final package gate passes 284 test functions, macOS example passes 40 functions/41 executions, iOS Simulator build passes, structural/whitespace checks pass. Independent read-only review: all seven criteria PASS, no remaining findings after one verification/metadata fix round. Evidence: `specs/child-contexts/VERIFICATION.md` and `REVIEW.md`.
 - [ ] Investigate Spring-style inter-bean calls (diagnostic slice done; remaining: proxies / instance `@Bean` / macro rewriting, options in `specs/inter-bean-call-diagnostic/SPEC.md` Future work) (idea from Java, 2026-10-15): in Spring a `@Configuration` class is proxied, so `repoUsuarios()` calling `conexionBaseDatos()` returns the same singleton instead of a new instance. Explore whether `@Bean` could be instance methods where `self.otherBean()` goes through the context's registry. Notes:
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance
 	- Swift has no runtime subclass proxies, and `enum`/`struct` configurations can't be overridden; candidates: macro-rewritten bodies, a configuration instance owned by the context that forwards to accessors, or generating a subclass of a `class` configuration

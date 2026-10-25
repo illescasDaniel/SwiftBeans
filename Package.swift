@@ -89,6 +89,11 @@ let package = Package(
 			]
 		),
 		.testTarget(
+			name: "SwiftBeansChildContextIntegrationTests",
+			dependencies: ["SwiftBeans"],
+			plugins: [.plugin(name: "SwiftBeansPlugin")]
+		),
+		.testTarget(
 			name: "SwiftBeansMacrosTests",
 			dependencies: [
 				"SwiftBeansMacros",

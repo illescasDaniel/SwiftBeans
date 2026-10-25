@@ -3,7 +3,7 @@ import Observation
 import SwiftBeans
 
 /// Detail screen VM; the item is a runtime argument, so the context exposes `itemDetailViewModel(item:)`.
-@Service
+@Service(in: LoggedInContext.self)
 @Observable
 @MainActor
 final class ItemDetailViewModel {

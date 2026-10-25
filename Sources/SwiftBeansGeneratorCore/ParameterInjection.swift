@@ -12,7 +12,7 @@ struct ParameterInjection {
 	private let providedKeys: Set<BeanKey>
 	private var membersByElement: [TypeKey: [Int]] = [:]
 
-	init(_ providers: [BeanProvider]) {
+	init(_ providers: [BeanProvider], accessorNames: [BeanKey: String] = [:], owners: [BeanKey: String] = [:]) {
 		self.providers = providers
 		providedKeys = Set(providers.map(\.key))
 		for (index, provider) in providers.enumerated() where !provider.isAssisted {
@@ -23,7 +23,7 @@ struct ParameterInjection {
 		}
 		for element in membersByElement.keys {
 			membersByElement[element]!.sort {
-				(providers[$0].key.accessorName, providers[$0].location) < (providers[$1].key.accessorName, providers[$1].location)
+				(accessorNames[providers[$0].key] ?? providers[$0].key.accessorName, owners[providers[$0].key] ?? "", providers[$0].location) < (accessorNames[providers[$1].key] ?? providers[$1].key.accessorName, owners[providers[$1].key] ?? "", providers[$1].location)
 			}
 		}
 	}

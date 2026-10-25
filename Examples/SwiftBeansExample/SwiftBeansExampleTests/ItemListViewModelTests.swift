@@ -10,7 +10,7 @@ struct ItemListViewModelTests {
 		let items = [
 			Item(id: 1, title: "Post", detail: "Body"),
 		]
-		let context = FakeAppContext(itemRepository: StubItemRepository(items: items))
+		let context = FakeLoggedInContext(parent: FakeAppContext(itemRepository: StubItemRepository(items: items)))
 		let viewModel = context.itemListViewModel
 		#expect(viewModel.state == .idle)
 
@@ -22,7 +22,7 @@ struct ItemListViewModelTests {
 
 	@Test
 	func `Given FakeAppContext default fakes When refresh Then loads JSONPlaceholder sample posts`() async {
-		let context = FakeAppContext()
+		let context = FakeLoggedInContext(parent: FakeAppContext())
 		let viewModel = context.itemListViewModel
 
 		await viewModel.refresh()
@@ -33,7 +33,7 @@ struct ItemListViewModelTests {
 
 	@Test
 	func `Given failing repository When refresh Then state is failed and items stay empty`() async {
-		let context = FakeAppContext(itemRepository: StubItemRepository(items: [], shouldThrow: true))
+		let context = FakeLoggedInContext(parent: FakeAppContext(itemRepository: StubItemRepository(items: [], shouldThrow: true)))
 		let viewModel = context.itemListViewModel
 
 		await viewModel.refresh()

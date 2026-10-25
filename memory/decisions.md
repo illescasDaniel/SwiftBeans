@@ -1,5 +1,45 @@
 # Decisions
 
+## 2026-10-25 — Child-context architecture approved and managed lifecycle delivered
+
+**Context:** The user explicitly approved the child-context architecture after the design/spec approvals. Login-scoped objects can remain externally retained after logout, so cleanup completion must be independent of their ARC deallocation.
+
+**Decision:** Deliver A1/A2 with a separate MainActor `SwiftBeansManagedRegistry`; preserve the existing root/ARC registry. Managed close runs one unstructured actor-isolated cleanup task shared by all callers, enrolls instantiated own singleton identities once, and guards subsequent generated resolutions and retained factories. The example root coordinator owns a flow containing the context and transient child coordinator. Compiler identity witnesses validate unresolved qualified context references without guessing Xcode module names.
+
+**Rationale:** This keeps existing root behavior and locking intact, avoids new unsafe sendability promises, makes waiter cancellation unable to abandon cleanup, and preserves the example's existing factory/build composition. Solely owned beans release normally; externally retained beans follow their service-defined inactive behavior and eventual ARC lifetime.
+
+## 2026-10-25 — Child-context spec approved, including managed teardown
+
+**Context:** The revised spec brings coordinator-owned login flows and optional managed cleanup into initial delivery alongside child dependency graphs.
+
+**Decision:** The user explicitly approved `specs/child-contexts/SPEC.md` and the managed teardown option. Phase 2 proposes a separate MainActor managed registry and compiler-checked public/consumer contract snapshots; those architecture choices still require separate approval.
+
+**Rationale:** The approved spec fixes cleanup participation, close idempotency, resolution boundaries and escaped-reference limits before implementation. Separating architecture approval lets the runtime/cache and actor-safe factory contracts be reviewed without changing those behaviors.
+
+## 2026-10-25 — Child-context resource budget: structural limits before timing thresholds
+
+**Context:** Child graphs need explicit build/runtime constraints, but the package has no agreed performance benchmark baseline and user-defined async cleanup controls close duration.
+
+**Decision:** The user confirmed preservation of root-only generated output, no additional whole-source scan per child, lifecycle bookkeeping proportional to instantiated child singletons and cleanup proportional to participating objects. Do not set an initial absolute millisecond/graph-size cap or fixed callback-duration budget. Record structural checks and representative comparisons in the architecture/test plan.
+
+**Rationale:** These constraints prevent repeated scanning and unnecessary lifecycle work while keeping acceptance independent of machine speed and application callback latency.
+
+## 2026-10-25 — Child-context design approved: coordinator flow and managed cleanup
+
+**Context:** The app example builds screens through injected factories. A login-scoped dependency graph also needs a defined boundary for stopping session work when outgoing UI still retains a model or repository.
+
+**Decision:** The user approved `design/child-contexts/DESIGN.md`: the root coordinator owns a flow containing a child context and transient child coordinator; ARC is default, with optional managed cleanup of instantiated child singletons. Managed contexts initially use MainActor; generated resolution fails a precondition after closing starts. Initial delivery comprises child graphs (A1) and managed cleanup plus the login example (A2).
+
+**Rationale:** This preserves existing factory/build conventions, avoids caching a context-retaining coordinator in that context, and gives logout one awaited cleanup boundary. Cleanup can stop owned work without claiming to force deallocation of escaped references. Design approval does not approve the spec or architecture.
+
+## 2026-10-25 — SDD workflow: design, spec, architecture gates and independent grade
+
+**Context:** The local SDD skill had four phases (spec, architecture, tests, implementation), while the upstream `illescasDaniel/sdd-feature-skill` revision added a system-design deliverable, explicit decision review, structural checks, and post-implementation conformance grading.
+
+**Decision:** Adopt upstream commit `5443fe57ff5f0fef25d8a76f75dae64953bb9e7b` as the workflow baseline, adapted for SwiftBeans. API/behavior changes use separate design, spec, and architecture approval gates; tests map to approved Given/When/Then criteria; implementation is followed by independent read-only grading. No UI track is used. Design skips for small internal-only changes also require approval.
+
+**Rationale:** The design phase surfaces module and generated-code seams before the spec is frozen, the spec records compatibility and failure decisions, and independent grading checks that tests assert the approved outcomes. SwiftBeans-specific templates keep this useful for a package with runtime, macros, generator, and plugin targets without importing app-only workflows.
+
 ## 2026-10-16 — feature/improvements: merge order and BeanKey cross-feature seams
 
 **Context:** Seven draft PRs (local-package scan, inter-bean diagnostic, graph dump, qualifiers, factory injection, collection injection, child-contexts SPEC) needed a single integration branch without closing the PRs.

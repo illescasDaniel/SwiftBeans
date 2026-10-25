@@ -3,8 +3,8 @@ import Observation
 import SwiftBeans
 
 /// Presentation: owns UI state. Depends on `FetchItemsUseCase` only.
-/// Transient so each screen can get its own instance from `AppContext`.
-@Service(scope: .transient)
+/// Transient so each screen can get its own instance from `LoggedInContext`.
+@Service(in: LoggedInContext.self, scope: .transient)
 @Observable
 @MainActor
 final class ItemListViewModel {

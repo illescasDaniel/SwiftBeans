@@ -40,8 +40,8 @@ struct ItemDetailView: View {
 
 #if DEBUG
 #Preview("ItemDetailView") {
-	let context = FakeAppContext()
-	PreviewRootView(coordinator: context.appCoordinator) {
+	let context = FakeLoggedInContext(parent: FakeAppContext())
+	PreviewRootView(coordinator: context.loggedInCoordinator) {
 		ItemDetailView(
 			viewModel: context.itemDetailViewModel(item: Item(id: 1, title: "Preview", detail: "Body"))
 		)

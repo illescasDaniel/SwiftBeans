@@ -26,6 +26,7 @@ Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Ca
 - [Installation](#installation)
 - [Concepts](#concepts)
 - [Scopes](#scopes)
+- [Child contexts: login lifetime](#child-contexts-login-lifetime)
 - [Binding to protocols](#binding-to-protocols)
 - [Collections: every bean of a kind](#collections-every-bean-of-a-kind)
 - [Choosing an initializer: `@Inject`](#choosing-an-initializer-inject)
@@ -279,6 +280,40 @@ Coordinator(makeDetail: { self.itemDetailViewModel(item: $0) }, makeList: { self
 - The closure captures the context strongly: keep factories in transient beans (a coordinator), not singletons, if the context must be freed.
 - Factories resolve against the **unqualified** provider of the return type (see qualifiers above).
 
+## Child contexts: login lifetime
+
+A child graph owns dependencies for one login while sharing app-lifetime repositories and infrastructure from its parent:
+
+```swift
+@MainActor
+@ChildContext(of: AppContext.self, teardown: .managed)
+final class LoggedInContext {
+	@ContextInput let credentials: SessionCredentials
+}
+
+@MainActor
+@Service(in: LoggedInContext.self)
+final class UserRepository: ContextCleanup {
+	init(credentials: SessionCredentials, catalog: any ItemRepository) { … }
+
+	func close() async {
+		// Stop owned session work and await its completion.
+	}
+}
+
+let child = LoggedInContext(parent: appContext, credentials: credentials)
+let repository = child.userRepository
+await child.close()
+```
+
+`@ContextInput` is one stored instance `let` with an explicit nonoptional type and no default. The generated initializer takes `parent:` then inputs in declaration order. The parent is typed as its generated protocol, so a fake parent works too. Each child protocol exposes its own beans and input properties. Children see parent beans; parents and siblings cannot see child beans. Duplicate keys across a parent/child chain are errors. Providers default to the root; `@Configuration(in:)` can supply a default owner with per-`@Bean(in:)` overrides.
+
+Omitting `teardown:` selects `.arc`: releasing the child releases its cache when no other owner retains it. `.managed` requires explicit `@MainActor` and adds nonthrowing `close() async`. Awaiting close automatically invokes `ContextCleanup` on instantiated child singleton objects, once per object identity in reverse creation order, then releases the cache. It never constructs unused beans for cleanup or closes parent beans, inputs, transients or assisted instances. Repeated close callers await the same operation; cancellation of a waiter does not cancel cleanup.
+
+Generated resolution and retained child factories trap with a named precondition once closing starts. Stored inputs remain readable. Objects retained by an outgoing view/model can outlive close; participating services define their own behavior after shutdown. ARC cannot force their deallocation, and deinit does not launch asynchronous cleanup. The app must await close at logout or authentication expiry. Cleanup uses already-held dependencies and must not recursively await the same context's close or resolve new beans through it.
+
+The example's `AppCoordinator` owns a `LoggedInFlow` containing the context and a transient `LoggedInCoordinator`. That child coordinator keeps the existing screen-factory / `build(_:)` pattern, and views own their models through `@State`. Logout removes the signed-in tree and awaits flow cleanup before allowing another login. Factory closures retain their context, so caching a coordinator that retains those factories as a singleton in that context can create a cycle. Local-package providers remain app-owned; child graphs are declared in the target that owns the root. Root inputs, child-of-child graphs and parent overrides are deferred.
+
 ## Testing and Previews: `{Context}Protocol`
 
 For each context the plugin also generates a protocol with the same accessors and methods, and conforms the context to it:
@@ -349,11 +384,11 @@ local_packages:
 - Annotated declarations inside `#if` blocks are a build error (the generator can't know which branch compiles). `#if` inside a function body is fine.
 - Unsupported key types: optionals, tuples, functions (except as factory parameters), `some P`, metatypes, `any A & B`, generic parameters. Wrap them in a named type or provide a protocol.
 - Keys match by spelling after normalization: `[String: Int]` ≡ `Dictionary<String, Int>`, `any P` ≡ `P`, but a typealias and its underlying type are different keys.
-- Generic `@Service` types, property injection and subcontexts are not supported in v1.
+- Generic `@Service` types and property injection are unsupported. Child contexts support one level in the root target; root context inputs and nested child graphs are deferred.
 
 ## Example app
 
-[`Examples/SwiftBeansExample`](Examples/SwiftBeansExample) is a multiplatform SwiftUI app (iOS + macOS) that uses every feature above: `@Configuration` beans for an HTTP client, a protocol-bound repository, transient view models, `@Inject`, `@Assisted`, qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`, including two `JSONDecoder`s), collection injection (`[any FeatureNote]`), factories on `AppCoordinator`, a local package via `.swiftbeans.yml`, and a `FakeAppContext` for Previews and tests. Debug builds use an offline fake HTTP handler; Release builds use `URLSession.shared`. The features screen shows the live wiring.
+[`Examples/SwiftBeansExample`](Examples/SwiftBeansExample) is a multiplatform SwiftUI app (iOS + macOS) that uses every feature above: `@Configuration` beans for an HTTP client, a protocol-bound repository, transient view models, `@Inject`, `@Assisted`, qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`, including two `JSONDecoder`s), collection injection (`[any FeatureNote]`), factories on `LoggedInCoordinator`, a local package via `.swiftbeans.yml`, and `FakeAppContext` / `FakeLoggedInContext` for Previews and tests. A local demo login creates a managed child, the User tab receives its session repository through a factory-built model, and logout/expiry await cleanup while app repositories remain alive. Debug builds use an offline fake HTTP handler; Release builds use `URLSession.shared`. The features screen shows the live wiring.
 
 ```bash
 cd Examples/SwiftBeansExample && xcodebuild test -project SwiftBeansExample.xcodeproj -scheme SwiftBeansExample -destination 'platform=macOS' -skipPackagePluginValidation -skipMacroValidation
