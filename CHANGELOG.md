@@ -11,6 +11,10 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 - Owner-aware child graph dumps and a login-required example with a root flow owner, transient child coordinator, user tab, session work cleanup, stale-login protection and hand-written child fakes.
 - Plugin-backed child integration tests, strict-concurrency generated-source fixtures, isolated lifecycle exit tests and root-output/resource-budget checks.
 
+### Fixed
+
+- Generated accessor and context protocol types preserve nested `any` in arrays, dictionaries and generic arguments, including factory returns and owner-aware child-context evidence. Dependency keys and resolution remain unchanged. The example demonstrates a named existential array alongside automatic collection injection, with real/fake wiring and sibling-session tests.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

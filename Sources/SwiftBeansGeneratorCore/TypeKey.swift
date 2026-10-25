@@ -134,19 +134,18 @@ struct UnsupportedKey: Error, Equatable, Sendable, CustomStringConvertible {
 }
 
 enum KeyNormalization {
-	typealias Normalized = (key: TypeKey, spelledWithAny: Bool)
+	typealias Normalized = (key: TypeKey, spelledWithAny: Bool, emittedType: EmittedType)
 
 	/// Normalizes `type`: strips `any`, parentheses and whitespace; desugars `Array` / `Dictionary`.
 	static func key(for type: TypeSyntax) -> Result<Normalized, UnsupportedKey> {
 		let unwrapped = strippingParentheses(type)
 		var spelledWithAny = false
-		var keyType = unwrapped
 		if let existential = unwrapped.as(SomeOrAnyTypeSyntax.self), existential.someOrAnySpecifier.tokenKind == .keyword(.any) {
 			spelledWithAny = true
-			keyType = existential.constraint
 		}
 		do {
-			return .success((try normalize(keyType), spelledWithAny))
+			let emitted = try normalize(unwrapped)
+			return .success((emitted.key, spelledWithAny, emitted))
 		} catch {
 			return .failure(error)
 		}
@@ -196,7 +195,7 @@ enum KeyNormalization {
 		return elementSpelledWithAny(TypeSyntax.parse(from: &parser))
 	}
 
-	private static func normalize(_ type: TypeSyntax) throws(UnsupportedKey) -> TypeKey {
+	private static func normalize(_ type: TypeSyntax) throws(UnsupportedKey) -> EmittedType {
 		let type = strippingParentheses(type)
 		if let identifier = type.as(IdentifierTypeSyntax.self) {
 			let name = identifier.name.text
@@ -206,14 +205,18 @@ enum KeyNormalization {
 			case ("Optional", 1): throw UnsupportedKey(reason: .optional)
 			case ("Array", 1): return .array(arguments[0])
 			case ("Dictionary", 2): return .dictionary(arguments[0], arguments[1])
-			default: return .nominal([.init(name, arguments)])
+			default: return .nominal([.init(name: name, genericArguments: arguments)])
 			}
 		}
 		if let member = type.as(MemberTypeSyntax.self) {
-			guard case .nominal(let base) = try normalize(member.baseType) else {
+			var baseType = try normalize(member.baseType)
+			// A member's base is its qualification namespace, not an existential wrapper
+			// around the resulting member type: `(any P).Alias` canonicalizes to `P.Alias`.
+			while case .existential(let constraint) = baseType { baseType = constraint }
+			guard case .nominal(let base) = baseType else {
 				throw UnsupportedKey(reason: .unrecognized)
 			}
-			return .nominal(base + [.init(member.name.text, try genericArguments(member.genericArgumentClause))])
+			return .nominal(base + [.init(name: member.name.text, genericArguments: try genericArguments(member.genericArgumentClause))])
 		}
 		if let array = type.as(ArrayTypeSyntax.self) {
 			return .array(try normalize(array.element))
@@ -225,7 +228,7 @@ enum KeyNormalization {
 			guard existential.someOrAnySpecifier.tokenKind == .keyword(.any) else {
 				throw UnsupportedKey(reason: .opaque)
 			}
-			return try normalize(existential.constraint)
+			return .existential(try normalize(existential.constraint))
 		}
 		if let attributed = type.as(AttributedTypeSyntax.self) {
 			return try normalize(attributed.baseType)
@@ -239,9 +242,9 @@ enum KeyNormalization {
 		throw UnsupportedKey(reason: .unrecognized)
 	}
 
-	private static func genericArguments(_ clause: GenericArgumentClauseSyntax?) throws(UnsupportedKey) -> [TypeKey] {
+	private static func genericArguments(_ clause: GenericArgumentClauseSyntax?) throws(UnsupportedKey) -> [EmittedType] {
 		guard let clause else { return [] }
-		var keys: [TypeKey] = []
+		var keys: [EmittedType] = []
 		for argument in clause.arguments {
 			keys.append(try normalize(argument.argument))
 		}
@@ -266,6 +269,7 @@ struct FactoryType: Equatable, Sendable {
 	var parameterTypes: [String]
 	var returnKey: TypeKey
 	var returnSpelledWithAny: Bool
+	var returnEmittedType: EmittedType
 
 	/// `(Item) -> ItemDetailViewModel`
 	var description: String {
@@ -300,7 +304,8 @@ enum FactoryNormalization {
 			return .success(FactoryType(
 				parameterTypes: parameterTypes,
 				returnKey: normalized.key,
-				returnSpelledWithAny: normalized.spelledWithAny
+				returnSpelledWithAny: normalized.spelledWithAny,
+				returnEmittedType: normalized.emittedType
 			))
 		case .failure(let unsupported):
 			return .failure(UnsupportedFactory(description: "the factory's return type is not injectable: \(unsupported)"))

@@ -7,7 +7,8 @@ import SwiftBeans
 /// - `jsonDecoder` and `snakeCaseJSONDecoder` (`@Bean(named:)` / `@Qualifier`)
 /// - `itemRepository` → `JSONPlaceholderItemRepository` as `ItemRepository`
 /// - `fetchItemsUseCase`
-/// - `[any FeatureNote]` on the features demo, and named `TagSource`s
+/// - `[any FeatureNote]` collection injection and the explicit `highlightsFeatureNoteArray` bean
+/// - named `TagSource`s
 /// - authentication and transient login/features models
 /// `LoggedInContext` owns session repositories, screen models and its transient coordinator.
 ///

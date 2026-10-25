@@ -57,4 +57,31 @@ struct AppContextScopeTests {
 		#expect(first.repository.isClosed)
 	}
 
+	@Test func `Given two child contexts When one closes Then the parent array and sibling session remain usable`() async {
+		let parent = AppContext()
+		let first = LoggedInContext(parent: parent, credentials: .preview)
+		let second = LoggedInContext(parent: parent, credentials: .preview)
+		let firstRepository = first.userRepository
+		let secondRepository = second.userRepository
+		let firstModel = parent.featuresDemoViewModel
+		let secondModel = parent.featuresDemoViewModel
+		#expect(firstRepository !== secondRepository)
+		#expect(first.userTabViewModel.repository === firstRepository)
+		#expect(second.userTabViewModel.repository === secondRepository)
+		for model in [firstModel, secondModel] {
+			#expect(model.highlightedNotes.map(\.title) == ["Factories", "@Assisted"])
+			#expect(model.highlightedNotes.first as? FactoryFeatureNote === parent.factoryFeatureNote)
+			#expect(model.highlightedNotes.last as? AssistedFeatureNote === parent.assistedFeatureNote)
+		}
+		await first.close()
+		#expect(firstRepository.isClosed)
+		#expect(!secondRepository.isClosed)
+		let stillOpen = parent.featuresDemoViewModel
+		#expect(second.userTabViewModel.repository === secondRepository)
+		#expect(stillOpen.highlightedNotes.first as? FactoryFeatureNote === parent.factoryFeatureNote)
+		#expect(parent.highlightsFeatureNoteArray.last as? AssistedFeatureNote === parent.assistedFeatureNote)
+		await second.close()
+		#expect(secondRepository.isClosed)
+	}
+
 }

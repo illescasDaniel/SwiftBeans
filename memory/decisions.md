@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-10-25 — Nested existential spelling uses original evidence per owner
+
+**Context:** The nested-`any` fix needs consistent accessor/protocol spelling without changing normalized dependency identity or leaking inferred markers between sibling contexts. Design, spec and architecture were approved separately in chat.
+
+**Decision:** Carry recursive `EmittedType` metadata through normalization/resolution and compute one immutable `AccessorTypePlan` from original source evidence in existing visibility views. Preserve legacy nominal qualification for `(any P).Alias` by removing existential wrappers only from the member's qualification base.
+
+**Rationale:** Complete-type evidence unions are deterministic and owner-aware; inferred results never become new evidence. Qualification-base wrappers do not wrap the resulting alias type, so retaining canonical `P.Alias` preserves valid existing source and output.
+
+## 2026-10-25 — Separate emitted existential spelling from graph identity
+
+**Context:** Normalized graph keys discard nested `any`, so reconstructing accessor types from keys can emit invalid Swift under `ExistentialAny`.
+
+**Decision:** User selected a recursive emitted-type representation alongside normalized dependency keys. Detailed design remains a proposal awaiting its separate approval gate.
+
+**Rationale:** Dependency equivalence and valid emitted Swift syntax require different information; preserving structural spelling addresses arrays, dictionaries and generic arguments without changing graph identity.
+
 ## 2026-10-25 — SDD workflow uses separate design, spec, and architecture gates
 
 **Context:** SwiftBeans is a growing Swift package with runtime, macro, generator, plugin, and example seams; the prior workflow centered on specs and contracts but did not define a design phase or an independent conformance grade.

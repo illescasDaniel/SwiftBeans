@@ -11,6 +11,7 @@ struct BeanProvider {
 	}
 
 	var key: BeanKey
+	var emittedType: EmittedType
 	var spelledWithAny: Bool
 	var scope: ScopeLiteral
 	var origin: SourceFile.Origin
@@ -34,6 +35,7 @@ struct BeanParameter {
 	var label: String?
 	/// `nil` when the parameter can only take its default (unsupported or unwritten type), and always for an assisted one.
 	var key: BeanKey?
+	var emittedType: EmittedType?
 	var spelledWithAny: Bool
 	/// `[any P]`: with no array bean and no members, the parameter gets `[]`.
 	var elementSpelledWithAny: Bool
@@ -170,6 +172,7 @@ struct ProviderResolver {
 		let resolved = resolveParameters(parameters)
 		providers.append(BeanProvider(
 			key: BeanKey(normalized.key, qualifier: service.qualifier),
+			emittedType: normalized.emittedType,
 			spelledWithAny: normalized.spelledWithAny,
 			scope: scope(service.scope, scopeLocation: service.scopeLocation, parameters: resolved),
 			origin: origin,
@@ -233,6 +236,7 @@ struct ProviderResolver {
 		let resolved = resolveParameters(bean.parameters)
 		providers.append(BeanProvider(
 			key: BeanKey(normalized.key, qualifier: bean.qualifier),
+			emittedType: normalized.emittedType,
 			spelledWithAny: normalized.spelledWithAny,
 			scope: scope(bean.scope, scopeLocation: bean.scopeLocation, parameters: resolved),
 			origin: origin,
@@ -290,7 +294,7 @@ struct ProviderResolver {
 						error(violation.id, at: violation.location, violation.message)
 						return BeanParameter(
 							label: parameter.label,
-							key: nil,
+							key: nil, emittedType: nil,
 							spelledWithAny: false,
 							elementSpelledWithAny: false,
 							hasDefault: parameter.hasDefault,
@@ -313,7 +317,7 @@ struct ProviderResolver {
 				}
 				return BeanParameter(
 					label: parameter.label,
-					key: nil,
+					key: nil, emittedType: nil,
 					spelledWithAny: false,
 					elementSpelledWithAny: false,
 					hasDefault: parameter.hasDefault,
@@ -339,7 +343,7 @@ struct ProviderResolver {
 				}
 				return BeanParameter(
 					label: parameter.label,
-					key: nil,
+					key: nil, emittedType: nil,
 					spelledWithAny: false,
 					elementSpelledWithAny: false,
 					hasDefault: parameter.hasDefault,
@@ -349,10 +353,12 @@ struct ProviderResolver {
 				)
 			}
 			var key: BeanKey?
+			var emittedType: EmittedType?
 			var spelledWithAny = false
 			switch parameter.key {
 			case .success(let normalized):
 				key = BeanKey(normalized.key, qualifier: qualifier)
+				emittedType = normalized.emittedType
 				spelledWithAny = normalized.spelledWithAny
 			case .failure(let unsupported) where !parameter.hasDefault:
 				error("key.unsupported", at: parameter.typeLocation, "cannot inject '\(parameter.typeSpelling)': \(unsupported)")
@@ -361,7 +367,7 @@ struct ProviderResolver {
 			}
 			return BeanParameter(
 				label: parameter.label,
-				key: key,
+				key: key, emittedType: emittedType,
 				spelledWithAny: spelledWithAny,
 				elementSpelledWithAny: parameter.elementSpelledWithAny,
 				hasDefault: parameter.hasDefault,

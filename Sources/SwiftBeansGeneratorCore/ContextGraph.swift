@@ -11,6 +11,7 @@ struct ContextInputDecl {
 	var name: String
 	var typeSpelling: String
 	var key: BeanKey
+	var emittedType: EmittedType
 	var spelledWithAny: Bool
 	var location: SourcePosition
 }
@@ -245,7 +246,7 @@ enum ContextGraph {
 					where conformances.insert(inherited).inserted { pending.append(inherited) }
 				}
 				let bean = BeanProvider(
-					key: input.key, spelledWithAny: input.spelledWithAny, scope: .singleton,
+					key: input.key, emittedType: input.emittedType, spelledWithAny: input.spelledWithAny, scope: .singleton,
 					origin: .target, location: input.location,
 					displayName: "\(child.context.name).\(input.name)",
 					construction: .contextInput(propertyName: input.name), parameters: [],
@@ -329,10 +330,12 @@ enum ContextGraph {
 						module: module, testable: false, preconcurrency: false, condition: nil))
 			}
 		}
+		let accessorTypes = AccessorTypePlanner.plan(views: plans.map { AccessorTypeView(visible: $0.visible) })
 		var output = CodeGenerator.header + "\n" + CodeGenerator.importBlock(imports) + "\n"
 		for plan in plans {
 			let generated = CodeGenerator.generate(
-				context: plan.context, providers: plan.own.map(\.bean), imports: [], plan: plan,
+				context: plan.context, providers: plan.own.map(\.bean), imports: [],
+				accessorTypes: accessorTypes.types(ownedBy: plan.context.name), plan: plan,
 				includePreamble: false)
 			output += generated + "\n"
 		}

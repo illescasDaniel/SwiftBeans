@@ -4,27 +4,41 @@ _Last updated: 2026-10-25_
 
 ## Branch
 
-- `main`; the child-context delivery is in `68bae10`, followed by the example session lifecycle and SDD workflow/MCP setup changes saved in the 2026-10-25 handoff commit and pushed to `origin/main`.
-- Published baseline remains `0.2.0`; no version bump or release was part of this handoff.
+- `main`, tracking `origin/main`.
+- This handoff contains the nested existential spelling fix and example demonstration.
+- Child contexts A1/A2 are in `68bae10`; example session/workflow changes are in `63e4572`.
+- Published baseline remains `0.2.0`; no version bump, tag or release is included.
 
 ## Current focus
 
-Latest saved work on 2026-10-25 includes the Codex MCP setup, refreshed SDD workflow, and completed example session lifecycle refactor. `.codex/config.toml` mirrors `codenav-swift`, `xcode-tools`, and `jevmem` from the unchanged `.mcp.json`; all nine project skills are exposed through `.agents/skills/` symlinks to `.cursor/skills/`.
+Nested existential spelling and its example follow-up are complete. The design, spec and
+architecture were approved separately in chat on 2026-10-25. The user requested commit and push.
 
-The session refactor's design, amended spec and revised architecture were approved in chat on 2026-10-25. AppSession owns authentication/session state; app composes it separately from AppCoordinator, which receives only a login-model factory and sign-in action. Root presentation observes the session; signed-in UI gets logout/expiry callbacks without a root coordinator environment dependency.
+Recursive `EmittedType` metadata preserves nested `any` independently of normalized dependency
+keys. `AccessorTypePlanner` combines original evidence using existing ownership/visibility, and
+accessors and protocol requirements share the resulting spelling. Qualified aliases retain legacy
+canonical qualification. Graph identity, wiring, scopes and lifecycle policies are unchanged.
+
+The example features screen demonstrates a named `[any FeatureNote]` bean beside automatic
+collection injection. Real/fake protocol tests assert order and singleton member identity; a real
+sibling-session test checks that closing one child preserves its sibling and parent-owned beans.
+Previous child-context coverage was confirmed across runtime, macro, generator/compiler,
+plugin/lifecycle integration and example tests.
 
 ## Final evidence
 
-- Test-first session scaffold compiled and failed its intended authentication/admission assertions.
-- `swift test`: 284 passing functions.
-- macOS example: 52 passing functions / 61 executions, zero failures/skips/runtime warnings.
-- Generic iOS Simulator build, structural spec check and whitespace/tab checks pass.
-- Independent read-only review: all seven criteria PASS, no actionable findings or fix rounds.
-- Evidence: `specs/example-session-lifecycle/VERIFICATION.md` and `REVIEW.md`.
-- README and child-context ownership wording updated to match the approved amendment.
-- Child contexts A1/A2 remain completed in `68bae10`. No new version, tag or release was part of the handoff.
+- Test-first generated-output and compiler regressions reproduced the lost nested markers.
+- `swift test`: 307 passing test functions, including ordinary/ExistentialAny compiler fixtures.
+- macOS example: 54 functions / 64 executions PASS, zero failures/skips/runtime warnings.
+- Generic iOS Simulator build, structural spec checker and tab/whitespace checks PASS.
+- Independent library review: all seven criteria PASS after one fix round; no remaining findings.
+- Supplemental independent example review: all seven criteria PASS; no findings.
+- Artifacts: `design/nested-existential-spelling/DESIGN.md` and
+	`specs/nested-existential-spelling/{SPEC,ARCHITECTURE,VERIFICATION,REVIEW}.md`.
+- Child contexts and the separate app-owned `AppSession` lifecycle remain completed; prior evidence
+	is in `specs/child-contexts/` and `specs/example-session-lifecycle/`.
 
 ## Next steps
 
-1. No implementation work remains for the example-session refactor or the SDD workflow/MCP setup; await user direction.
-2. Other backlog stays in progress.md; later child-context phases remain outside A1/A2.
+1. No feature implementation remains; await user direction after this handoff.
+2. Other backlog stays in `progress.md`; later child-context phases remain outside A1/A2.

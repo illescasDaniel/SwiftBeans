@@ -56,4 +56,15 @@ enum AppConfiguration {
 	static func tagCounts() -> [String: Int] {
 		["swift": 3, "di": 2, "macros": 1]
 	}
+
+	/// An explicit array bean, rather than an automatically assembled collection.
+	/// Its generated accessor and protocol requirement both retain `[any FeatureNote]`.
+	/// Naming it keeps the unqualified collection-injection demo unchanged.
+	@Bean(named: "highlights")
+	static func highlightedNotes(
+		factory: FactoryFeatureNote,
+		assisted: AssistedFeatureNote
+	) -> [any FeatureNote] {
+		[factory, assisted]
+	}
 }

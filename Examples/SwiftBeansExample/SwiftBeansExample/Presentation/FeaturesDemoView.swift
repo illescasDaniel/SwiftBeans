@@ -77,6 +77,15 @@ struct FeaturesDemoView: View {
 				}
 			}
 
+			Section("Nested any in array beans") {
+				Text("A named @Bean returns [any FeatureNote]. Its generated accessor keeps the nested any, and @Qualifier(\"highlights\") injects that exact array in the bean's chosen order.")
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+				ForEach(viewModel.highlightedNotes, id: \.title) { note in
+					Text(note.title)
+				}
+			}
+
 			Section("Factories") {
 				Text("This screen's view model came from `() -> FeaturesDemoViewModel`. `LoggedInCoordinator` also takes `() -> ItemListViewModel` and `(Item) -> ItemDetailViewModel`, and it never holds the context.")
 					.font(.footnote)

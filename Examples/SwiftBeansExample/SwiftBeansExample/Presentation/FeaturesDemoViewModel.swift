@@ -21,6 +21,8 @@ final class FeaturesDemoViewModel {
 	let remoteTagLabel: String
 	/// Every `FeatureNote`, injected as `[any FeatureNote]`.
 	let featureNotes: [any FeatureNote]
+	/// Explicit named array bean; its declared order differs from automatic collection injection.
+	let highlightedNotes: [any FeatureNote]
 
 	private(set) var sampleTitle: String?
 	private(set) var state: LoadState = .idle
@@ -32,7 +34,8 @@ final class FeaturesDemoViewModel {
 		snakeCaseReader: SnakeCaseReader,
 		greetingStyles: GreetingStyles,
 		tagSources: TagSourcePair,
-		notes: [any FeatureNote]
+		notes: [any FeatureNote],
+		@Qualifier("highlights") highlightedNotes: [any FeatureNote]
 	) {
 		self.repository = repository
 		self.welcomeBannerMessage = welcomeBanner.message
@@ -43,6 +46,7 @@ final class FeaturesDemoViewModel {
 		self.builtinTagLabel = tagSources.builtinLabel
 		self.remoteTagLabel = tagSources.remoteLabel
 		self.featureNotes = notes
+		self.highlightedNotes = highlightedNotes
 	}
 
 	func fetchSamplePost() async {

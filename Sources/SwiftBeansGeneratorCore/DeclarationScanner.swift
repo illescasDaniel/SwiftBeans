@@ -357,7 +357,7 @@ struct DeclarationScanner {
 			      let binding = variable.bindings.first, let type = binding.typeAnnotation?.type else { continue }
 			switch KeyNormalization.key(for: type) {
 			case .success(let normalized):
-				inputs.append(ContextInputDecl(name: binding.pattern.trimmedDescription, typeSpelling: type.trimmedDescription, key: BeanKey(normalized.key), spelledWithAny: normalized.spelledWithAny, location: position(binding)))
+				inputs.append(ContextInputDecl(name: binding.pattern.trimmedDescription, typeSpelling: type.trimmedDescription, key: BeanKey(normalized.key), emittedType: normalized.emittedType, spelledWithAny: normalized.spelledWithAny, location: position(binding)))
 			case .failure(let reason):
 				result.contextDiagnostics.append(GeneratorDiagnostic(id: "context.invalidInput", location: position(type), message: "unsupported context input: \(reason)"))
 			}

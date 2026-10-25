@@ -222,10 +222,15 @@ package enum SwiftBeansGeneration {
 				imports.append(ImportRecord(module: module, testable: false, preconcurrency: false, condition: nil))
 			}
 		}
+		let owner = contexts.first?.name ?? ""
+		let accessorTypes = AccessorTypePlanner.plan(views: [AccessorTypeView(visible: providers.map {
+			GraphProvider(owner: owner, bean: $0, inputType: nil)
+		})])
 		let output = CodeGenerator.generate(
 			context: contexts.count == 1 ? contexts[0] : nil,
 			providers: providers,
-			imports: imports
+			imports: imports,
+			accessorTypes: accessorTypes.types(ownedBy: owner)
 		)
 		return GenerationResult(
 			diagnostics: diagnostics,

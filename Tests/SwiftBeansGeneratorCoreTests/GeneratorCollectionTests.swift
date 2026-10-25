@@ -176,7 +176,7 @@ struct GeneratorCollectionTests {
 			"""))
 		expectOutput(result, contains: [
 			"Analytics(trackers: self.analyticsTrackerArray)",
-			"\tvar analyticsTrackerArray: [AnalyticsTracker] { get }\n",
+			"\tvar analyticsTrackerArray: [any AnalyticsTracker] { get }\n",
 		])
 		expectOutput(result, excludes: ["[self.consoleTracker]"])
 	}

@@ -74,4 +74,20 @@ struct GeneratedWiringTests {
 		let notes = AppContext().featuresDemoViewModel.featureNotes
 		#expect(notes.map(\.title) == ["@Assisted", "Collections", "Factories", "@Qualifier"])
 	}
+
+	@Test(arguments: [false, true])
+	func `Given an explicit existential array When read through the context protocol Then order and singleton members survive`(fake: Bool) {
+		let context: any AppContextProtocol = fake ? FakeAppContext() : AppContext()
+		let notes: [any FeatureNote] = context.highlightsFeatureNoteArray
+		#expect(notes.map(\.title) == ["Factories", "@Assisted"])
+		#expect(notes.count == 2)
+		#expect(notes.first as? FactoryFeatureNote === context.factoryFeatureNote)
+		#expect(notes.last as? AssistedFeatureNote === context.assistedFeatureNote)
+		let model = context.featuresDemoViewModel
+		#expect(model.highlightedNotes.map(\.title) == notes.map(\.title))
+		#expect(model.highlightedNotes.first as? FactoryFeatureNote === context.factoryFeatureNote)
+		#expect(model.highlightedNotes.last as? AssistedFeatureNote === context.assistedFeatureNote)
+		#expect(model.featureNotes.map(\.title) == ["@Assisted", "Collections", "Factories", "@Qualifier"])
+	}
+
 }

@@ -28,6 +28,7 @@ final class FakeAppContext: AppContextProtocol {
 	let collectionFeatureNote: CollectionFeatureNote
 	let factoryFeatureNote: FactoryFeatureNote
 	let qualifierFeatureNote: QualifierFeatureNote
+	let highlightsFeatureNoteArray: [any FeatureNote]
 
 	let authenticationService: AuthenticationService
 	var loginViewModel: LoginViewModel { LoginViewModel(authentication: authenticationService) }
@@ -40,7 +41,8 @@ final class FakeAppContext: AppContextProtocol {
 			snakeCaseReader: snakeCaseReader,
 			greetingStyles: greetingStyles,
 			tagSources: tagSourcePair,
-			notes: [assistedFeatureNote, collectionFeatureNote, factoryFeatureNote, qualifierFeatureNote]
+			notes: [assistedFeatureNote, collectionFeatureNote, factoryFeatureNote, qualifierFeatureNote],
+			highlightedNotes: highlightsFeatureNoteArray
 		)
 	}
 
@@ -78,10 +80,13 @@ final class FakeAppContext: AppContextProtocol {
 		self.builtinStaticTagSource = builtin
 		self.remoteTagSource = remote
 		self.tagSourcePair = TagSourcePair(builtin: builtin, remote: remote)
-		self.assistedFeatureNote = AssistedFeatureNote()
+		let assisted = AssistedFeatureNote()
+		let factory = FactoryFeatureNote()
+		self.assistedFeatureNote = assisted
 		self.collectionFeatureNote = CollectionFeatureNote()
-		self.factoryFeatureNote = FactoryFeatureNote()
+		self.factoryFeatureNote = factory
 		self.qualifierFeatureNote = QualifierFeatureNote()
+		self.highlightsFeatureNoteArray = [factory, assisted]
 	}
 }
 #endif
