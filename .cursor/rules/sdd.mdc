@@ -5,11 +5,11 @@ alwaysApply: true
 
 # Spec-Driven Development
 
-Before implementing a public API change or changing library behavior:
+For public API or intentional behavior changes, follow `.cursor/skills/sdd-feature/SKILL.md` and the Phase Gate Protocol in `AGENTS.md`:
 
-1. Read or create `specs/<feature>/SPEC.md` with BDD acceptance criteria and out-of-scope items
-2. Get spec approval before writing contracts or code
-3. Write tests from the BDD scenarios before implementation
-4. If implementation reveals a spec gap, update the spec first — do not silently change behavior
+- Design (`design/<feature>/DESIGN.md`), then stop for explicit approval
+- Spec (`specs/<feature>/SPEC.md`), including agreed design decisions and BDD criteria, then stop for explicit approval
+- Architecture (`specs/<feature>/ARCHITECTURE.md`), then stop for explicit approval
+- Tests from the approved scenarios, implementation, and independent conformance grade
 
-New features require all four phases. Refactors must keep existing specs green or update specs explicitly.
+Do not skip or batch the design, spec, or architecture approval gates. A feature request or plan approval does not approve these artifacts. If implementation reveals a spec gap, update the spec and get approval before changing behavior. Internal refactors must keep existing specs green or update specs explicitly.

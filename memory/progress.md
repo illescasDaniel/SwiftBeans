@@ -1,5 +1,11 @@
 # Progress
 
+## Codex MCP configuration (2026-10-25)
+
+- [x] Exposed all nine project skills through individual `.agents/skills/` symlinks to `.cursor/skills/`, retaining Claude's existing shared source; verified every `SKILL.md` resolves to its original and documented maintenance in `AGENTS.md`.
+
+- [x] Added project `.codex/config.toml` mirroring all three `.mcp.json` servers; preserved the original JSON. `codex mcp list --json` recognizes all three as enabled, and definition parity passes. Live tool availability requires reloading the Codex session.
+
 ## SDD workflow refresh (2026-10-25)
 
 - [x] Updated `.cursor/skills/sdd-feature/` from upstream `illescasDaniel/sdd-feature-skill` commit `5443fe57ff5f0fef25d8a76f75dae64953bb9e7b` (2026-10-22), adapting design/spec/architecture gates, templates, structural checks, and independent grading to SwiftBeans package boundaries
@@ -122,3 +128,8 @@ Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 â
 	- Today `@Bean` is `static` and dependencies come in as parameters, so the generated code already shares singletons; but a `@Bean` body that calls `AppConfiguration.otherBean()` directly silently creates a second instance
 	- Swift has no runtime subclass proxies, and `enum`/`struct` configurations can't be overridden; candidates: macro-rewritten bodies, a configuration instance owned by the context that forwards to accessors, or generating a subclass of a `class` configuration
 	- ~~Cheap first step regardless: a build diagnostic when a `@Bean` body calls another `@Bean` directly, suggesting a parameter instead~~ (done: warning `bean.directCall`)
+
+## Example session lifecycle follow-up (2026-10-25)
+
+- [x] Commit completed child contexts A1/A2 as `68bae10`; keep Unreleased, no new library version. Fresh package tests pass.
+- [x] Simplify example AppCoordinator signIn/logOut responsibilities. Design approved in chat on 2026-10-25; spec approved in chat on 2026-10-25; amended spec for separate composition and injected actions approved 2026-10-25; revised architecture approved 2026-10-25; implementation and all quality gates pass (284 package tests, 52 example functions/61 executions, iOS Simulator build); independent grading PASS on all seven criteria, no findings. Refactor remains uncommitted; evidence in `specs/example-session-lifecycle/VERIFICATION.md` and `REVIEW.md`.

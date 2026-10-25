@@ -4,24 +4,27 @@ _Last updated: 2026-10-25_
 
 ## Branch
 
-- `main` (HEAD matches `origin/main`; child-context feature ready to commit; separate workflow changes remain uncommitted). Published baseline remains tag `0.2.0`.
+- `main`; the child-context delivery is in `68bae10`, followed by the example session lifecycle and SDD workflow/MCP setup changes saved in the 2026-10-25 handoff commit and pushed to `origin/main`.
+- Published baseline remains `0.2.0`; no version bump or release was part of this handoff.
 
 ## Current focus
 
-Child contexts A1/A2 are complete: design, spec and architecture approved; implementation and quality gates passed; independent review passes all seven criteria with no remaining findings. Results are recorded in `specs/child-contexts/VERIFICATION.md` and `REVIEW.md`.
+Latest saved work on 2026-10-25 includes the Codex MCP setup, refreshed SDD workflow, and completed example session lifecycle refactor. `.codex/config.toml` mirrors `codenav-swift`, `xcode-tools`, and `jevmem` from the unchanged `.mcp.json`; all nine project skills are exposed through `.agents/skills/` symlinks to `.cursor/skills/`.
 
-## Just changed
+The session refactor's design, amended spec and revised architecture were approved in chat on 2026-10-25. AppSession owns authentication/session state; app composes it separately from AppCoordinator, which receives only a login-model factory and sign-in action. Root presentation observes the session; signed-in UI gets logout/expiry callbacks without a root coordinator environment dependency.
 
-- Added `@ChildContext`, `@ContextInput`, provider ownership and parent visibility; preserved root-only generated output
-- Added optional MainActor managed teardown with identity-deduplicated cleanup, shared cancellation-independent close completion and resolution guards
-- Added owner-aware graph dumps, strict-concurrency generated-source fixtures, plugin integration tests, concurrency/lifetime checks and isolated precondition tests
-- Updated the example to local login → managed flow → transient child coordinator → factory-built screens/user tab; logout/expiry await cleanup and reject stale login results
-- Final gates: 284 package test functions; 40 macOS example test functions / 41 executions; generic iOS Simulator build; structural/whitespace checks all pass
-- Independent review findings were verification/metadata only and resolved in one fix round; final scorecard is PASS for all seven criteria
-- Existing refreshed SDD workflow and unrelated user changes remain present in the working tree
+## Final evidence
+
+- Test-first session scaffold compiled and failed its intended authentication/admission assertions.
+- `swift test`: 284 passing functions.
+- macOS example: 52 passing functions / 61 executions, zero failures/skips/runtime warnings.
+- Generic iOS Simulator build, structural spec check and whitespace/tab checks pass.
+- Independent read-only review: all seven criteria PASS, no actionable findings or fix rounds.
+- Evidence: `specs/example-session-lifecycle/VERIFICATION.md` and `REVIEW.md`.
+- README and child-context ownership wording updated to match the approved amendment.
+- Child contexts A1/A2 remain completed in `68bae10`. No new version, tag or release was part of the handoff.
 
 ## Next steps
 
-1. Commit completed child contexts A1/A2 as requested on 2026-10-25. Keep the changelog under Unreleased; no version bump, tag or release. Then assess the example AppCoordinator signIn/logOut responsibilities.
-2. Other backlog: nested-`any` array accessor gap (needs its own decision/spec), broader Spring-style inter-bean call investigation, optional closure of superseded draft PRs #1–#7.
-3. Future child-context phases (root inputs, generated child factories, nesting, overrides and broader actor support) remain explicitly outside this completed A1/A2 delivery.
+1. No implementation work remains for the example-session refactor or the SDD workflow/MCP setup; await user direction.
+2. Other backlog stays in progress.md; later child-context phases remain outside A1/A2.

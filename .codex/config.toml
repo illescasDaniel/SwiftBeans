@@ -1,0 +1,16 @@
+# Codex project MCP servers. Keep in sync with ../.mcp.json.
+
+[mcp_servers.codenav-swift]
+command = "codenav-swift-mcp"
+args = []
+
+[mcp_servers.codenav-swift.env]
+CODENAV_SWIFT_WRITE = "1"
+
+[mcp_servers.xcode-tools]
+command = "uvx"
+args = ["--from", "mcpbridge-wrapper", "mcpbridge-wrapper", "--broker"]
+
+[mcp_servers.jevmem]
+command = "uvx"
+args = ["--from", "jevmem", "jevmem-mcp"]

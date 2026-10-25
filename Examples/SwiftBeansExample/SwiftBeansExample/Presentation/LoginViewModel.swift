@@ -9,6 +9,7 @@ final class LoginViewModel {
 	var name = "Taylor"
 	private(set) var state: LoadState = .idle
 	private let authentication: AuthenticationService
+	// Protects model presentation; AppSession separately guards admission of an authenticated flow.
 	private var attempt: UUID?
 
 	init(authentication: AuthenticationService) { self.authentication = authentication }

@@ -2,7 +2,8 @@ import SwiftUI
 
 struct LoggedInNavigationView: View {
 	@Environment(LoggedInCoordinator.self) private var coordinator
-	@Environment(AppCoordinator.self) private var app
+	let onLogOut: @MainActor () async -> Void
+	let onSessionExpired: @MainActor () async -> Void
 
 	var body: some View {
 		@Bindable var coordinator = coordinator
@@ -16,8 +17,8 @@ struct LoggedInNavigationView: View {
 			NavigationStack {
 				coordinator.build(.user)
 					.toolbar {
-						Button("Log Out") { Task { await app.logOut() } }
-						Button("Expire Session") { Task { await app.sessionExpired() } }
+						Button("Log Out") { Task { await onLogOut() } }
+						Button("Expire Session") { Task { await onSessionExpired() } }
 					}
 			}
 			.tabItem { Label("User", systemImage: "person") }
@@ -27,16 +28,21 @@ struct LoggedInNavigationView: View {
 }
 
 struct AppRootView: View {
-	@Bindable var coordinator: AppCoordinator
+	let coordinator: AppCoordinator
+	let session: AppSession
 	var body: some View {
 		Group {
-			if let flow = coordinator.loggedIn {
-				LoggedInNavigationView().environment(flow.coordinator).id(flow.id)
+			if let flow = session.loggedIn {
+				LoggedInNavigationView(
+					onLogOut: { await session.logOut() },
+					onSessionExpired: { await session.sessionExpired() }
+				)
+				.environment(flow.coordinator)
+				.id(flow.id)
 			} else {
-				NavigationStack { coordinator.build(.login) }.disabled(coordinator.isEndingSession)
+				NavigationStack { coordinator.build(.login) }.disabled(session.isEndingSession)
 			}
 		}
-		.environment(coordinator)
 	}
 }
 

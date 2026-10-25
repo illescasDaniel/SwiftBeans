@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-10-25 — SDD workflow uses separate design, spec, and architecture gates
+
+**Context:** SwiftBeans is a growing Swift package with runtime, macro, generator, plugin, and example seams; the prior workflow centered on specs and contracts but did not define a design phase or an independent conformance grade.
+
+**Decision:** Require a design artifact for public API and intentional behavior changes, then separate explicit approval gates for design, spec, and architecture, followed by scenario-mapped tests, implementation, and independent read-only grading. Small internal-only changes may request approval to skip design.
+
+**Rationale:** The sequence makes package boundaries, compatibility, failure behavior, and acceptance criteria reviewable before implementation, while independent grading checks conformance beyond test results.
+
+## 2026-10-25 — Example session ownership separated from screen construction
+
+**Context:** Authentication cancellation/admission and managed logout had accumulated in AppCoordinator. Forwarding session members or exposing coordinator.session still made the coordinator the access point for session concerns.
+
+**Decision:** The user selected separate app-owned AppSession and AppCoordinator composition. The coordinator receives a sign-in action; root presentation observes the session directly and signed-in UI receives logout/expiry callbacks. AppSession uses one explicit lifecycle state while LoginViewModel retains its separate presentation-request identity.
+
+**Rationale:** Screen construction depends on the action it needs, without a session property or mirrored presentation state. One lifecycle owner preserves stale-result rejection and the cleanup admission barrier, and action callbacks remove the signed-in UI's root coordinator environment dependency.
+
 ## 2026-10-25 — Child-context architecture approved and managed lifecycle delivered
 
 **Context:** The user explicitly approved the child-context architecture after the design/spec approvals. Login-scoped objects can remain externally retained after logout, so cleanup completion must be independent of their ARC deallocation.

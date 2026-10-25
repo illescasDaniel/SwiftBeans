@@ -16,12 +16,18 @@ How the files work and how to reset them on a new branch: [memory/README.md](mem
 
 ## Phase Gate Protocol
 
-1. **Phase 1 — Spec:** Read or write the relevant `specs/<feature>/SPEC.md`. Stop and ask for human approval before proceeding.
-2. **Phase 2 — Architecture:** Write or update public contracts and module seams (runtime vs macros). Stop and ask for approval.
-3. **Phase 3 — Tests:** Write unit / macro tests from the BDD acceptance criteria. Tests must compile; implementations may be stubs.
-4. **Phase 4 — Implementation:** Implement until tests pass.
+Follow `.cursor/skills/sdd-feature/SKILL.md` for public API or intentional behavior changes. The phases are **design → spec → architecture → tests → implementation → independent grade**.
 
-If Phase 4 reveals a flaw in the spec, **rewrite the spec** (Phase 1), then update contracts and tests. Do not patch around a bad spec.
+1. **Phase 0 — Design:** Write `design/<feature>/DESIGN.md` for API, runtime, macro, generator, and plugin changes. For a small internal-only change where design adds no value, explain why and get approval to skip this phase.
+2. **Phase 1 — Spec:** Write/update `specs/<feature>/SPEC.md`, including agreed design decisions and Given/When/Then criteria. Stop for explicit approval.
+3. **Phase 2 — Architecture:** Write/update public contracts and module seams (runtime vs macros vs generator/plugin). Stop for explicit approval.
+4. **Phase 3 — Tests:** Map scenarios to Swift Testing and macro/generator compile tests. Tests must compile and fail for the intended reason before implementation.
+5. **Phase 4 — Implementation:** Implement until `swift test` and the documented feature-specific quality checks pass.
+6. **Phase 5 — Grade:** Have an independent, read-only reviewer compare the completed diff with the approved spec and project conventions. Resolve findings and report the final scorecard.
+
+Each Phase 0–2 is a separate approval gate. A feature request or approval of a plan is not approval of the design, spec, or architecture. Do not proceed past a gate until the user explicitly approves its artifact in chat.
+
+If implementation or review reveals a flaw in the spec, **rewrite the spec** (Phase 1), get approval, then update architecture and tests. Do not patch around a bad spec.
 
 ## Code style
 
@@ -69,6 +75,11 @@ xcode-build-server config \
 If codenav results disagree with grep, or after big refactors: `rm -rf DerivedData`, rebuild with `-derivedDataPath`, retry.
 
 ## Skills
+
+Codex discovers the project skills through `.agents/skills/`, whose skill folders
+are symlinked to `.cursor/skills/`. Claude uses `.claude/skills` pointing to the
+same source. Edit skills in `.cursor/skills/`; when adding a new skill, add its
+matching relative symlink under `.agents/skills/`.
 
 Project workflows:
 
