@@ -113,6 +113,7 @@ Landed on `feature/improvements` (2026-10-16) by merging draft PRs in order #3 â
 - [x] Inter-bean call diagnostic (`specs/inter-bean-call-diagnostic/SPEC.md`): warning `bean.directCall`
 - [x] Child contexts original Phase 1 draft and architecture stub (2026-10-15); superseded by the approved 2026-10-25 spec and Phase 2 proposal below
 - [x] Integration merge on `feature/improvements` + `swift test` green (201 tests / 19 suites, 2026-10-16). Example app combined check still optional.
+- [x] Optional cleanup: closed draft PRs #1â€“#7 as superseded by the integration merge.
 - [ ] Pre-existing gap: an array bean's accessor drops nested `any` (`-> [any P]` generates `[P]`), which breaks under `ExistentialAny`; fixing it changes output for existing graphs, so it needs its own decision
 - [x] Example app: qualifiers (`@Bean(named:)` / `@Service(named:)` / `@Qualifier`), collection injection (`[any FeatureNote]`), factories already on `AppCoordinator`. macOS `xcodebuild test` green (2026-10-16). Duplicate `printError` in `SwiftBeansGeneratorMain` fixed in the same pass (`swift test` does not build the generator executable)
 - [x] Example previews use `PreviewRootView` (debug-only, custom root) so `coordinator.path` is bound; `AppRootView` is constructed only from `@main` (2026-10-16)
