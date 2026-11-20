@@ -5,7 +5,7 @@ summary: SDD lifecycle, approval gates (design, spec, architecture), Given/When/
 type: explanation
 status: current
 updated: 2026-11-20
-verified: 2026-11-20 5e3b9bf
+verified: 2026-11-20 a9b9838
 covers: [.cursor/skills/sdd-feature/**]
 related: [DOC-001, DOC-002]
 supersedes:

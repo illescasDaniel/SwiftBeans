@@ -5,7 +5,7 @@ summary: Reading order for the vendored SDD playbooks and which skills implement
 type: reference
 status: current
 updated: 2026-11-20
-verified: 2026-11-20 5e3b9bf
+verified: 2026-11-20 a9b9838
 covers: [docs/playbooks/**, .cursor/skills/playbooks/**, .cursor/skills/sdd-feature/**]
 related: [DOC-002, DOC-003]
 supersedes:

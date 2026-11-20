@@ -5,7 +5,7 @@ summary: Package-specific overrides of the SDD playbook: library-shaped phases, 
 type: explanation
 status: current
 updated: 2026-11-20
-verified: 2026-11-20 5e3b9bf
+verified: 2026-11-20 a9b9838
 covers: [AGENTS.md, Package.swift, .cursor/skills/sdd-feature/**, .cursor/rules/sdd.mdc]
 related: [DOC-001, DOC-003]
 supersedes:
