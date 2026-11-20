@@ -296,7 +296,7 @@ struct GeneratorQualifierTests {
 	}
 
 	@Test
-	func `Given a Qualifier on a stored property or with Assisted When generated Then each attribute fails`() {
+	func `Given a Qualifier with Assisted on a parameter When generated Then it fails and a stored-property marker is left to the macro`() {
 		let result = generateWithContext(decodersFile, appFile("/App/Misuse.swift", """
 			@Service
 			struct Settings {
@@ -310,7 +310,6 @@ struct GeneratorQualifierTests {
 			"""))
 		#expect(result.output == nil)
 		#expect(result.errorSummary == [
-			"qualifier.property /App/Misuse.swift:3:2",
 			"qualifier.assisted /App/Misuse.swift:8:17",
 		], "\(result.renderedDiagnostics)")
 	}

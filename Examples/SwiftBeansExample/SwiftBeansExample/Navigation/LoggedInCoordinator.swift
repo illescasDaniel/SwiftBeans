@@ -5,7 +5,7 @@ import SwiftUI
 /// Builds screens from injected factories, so it never sees the context:
 /// `() -> T` re-reads a transient accessor, `(Item) -> T` calls an assisted accessor.
 /// Transient: factories capture the context, so a singleton holding them would keep it alive.
-@Service(in: LoggedInContext.self, scope: .transient)
+@Service(in: LoggedInContext.self, scope: .transient, autoInit: true)
 @Observable
 @MainActor
 final class LoggedInCoordinator {
@@ -15,18 +15,6 @@ final class LoggedInCoordinator {
 	private let makeItemDetail: @MainActor (Item) -> ItemDetailViewModel
 	private let makeUser: @MainActor () -> UserTabViewModel
 	private let makeFeaturesDemo: @MainActor () -> FeaturesDemoViewModel
-
-	init(
-		makeItemList: @escaping @MainActor () -> ItemListViewModel,
-		makeItemDetail: @escaping @MainActor (Item) -> ItemDetailViewModel,
-		makeUser: @escaping @MainActor () -> UserTabViewModel,
-		makeFeaturesDemo: @escaping @MainActor () -> FeaturesDemoViewModel
-	) {
-		self.makeItemList = makeItemList
-		self.makeItemDetail = makeItemDetail
-		self.makeUser = makeUser
-		self.makeFeaturesDemo = makeFeaturesDemo
-	}
 
 	func push(_ route: Route) {
 		path.append(route)

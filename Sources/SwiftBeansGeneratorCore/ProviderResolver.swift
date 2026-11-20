@@ -76,12 +76,6 @@ struct ProviderResolver {
 			for location in file.conditionalDecls {
 				resolver.error("decl.conditional", at: location, "SwiftBeans declarations inside '#if' blocks are not supported in v1")
 			}
-			for location in file.assistedPropertyLocations {
-				resolver.error("assisted.property", at: location, "@Assisted can only be applied to parameters, not stored properties")
-			}
-			for location in file.qualifierPropertyLocations {
-				resolver.error("qualifier.property", at: location, "@Qualifier can only be applied to parameters, not stored properties")
-			}
 			for service in file.services {
 				resolver.resolve(service, origin: file.source.origin)
 			}

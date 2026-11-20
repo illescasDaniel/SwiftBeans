@@ -2,6 +2,8 @@
 //
 // The macros report each `Violation` as a positioned diagnostic. The generator runs the same
 // rules and never reports them (the macro already fails the build), so nothing is reported twice.
+// `AutoInitRules.swift` holds the `@Service(autoInit: true)` initializer model and the `@Assisted` /
+// `@Qualifier` stored-property placement rules; the macros emit it and the generator reads it.
 // See specs/compile-time-di/ARCHITECTURE.md → SwiftBeansSyntaxRules.
 
 import SwiftSyntax
@@ -244,6 +246,9 @@ public enum SwiftBeansSyntaxRules {
 			violations.append(violation)
 		}
 		if case .failure(let violation) = owner(of: attribute) {
+			violations.append(violation)
+		}
+		if case .failure(let violation) = autoInit(of: attribute) {
 			violations.append(violation)
 		}
 		return violations

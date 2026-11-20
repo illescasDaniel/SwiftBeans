@@ -10,9 +10,9 @@ You annotate types and factories. A build tool plugin scans your target, checks 
 @ApplicationContext
 final class AppContext {}
 
-@Service
+@Service(autoInit: true)
 final class UserService {
-	init(apiClient: any APIClient) { … }
+	private let apiClient: any APIClient
 }
 
 let context = AppContext()
@@ -29,6 +29,7 @@ Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Ca
 - [Child contexts: login lifetime](#child-contexts-login-lifetime)
 - [Binding to protocols](#binding-to-protocols)
 - [Collections: every bean of a kind](#collections-every-bean-of-a-kind)
+- [Auto-generated initializers](#auto-generated-initializers)
 - [Choosing an initializer: `@Inject`](#choosing-an-initializer-inject)
 - [Runtime arguments: `@Assisted`](#runtime-arguments-assisted)
 - [Factories: `(Item) -> T` and `() -> T`](#factories-item---t-and----t)
@@ -74,11 +75,11 @@ Next to it the plugin writes `SwiftBeansGraph.md` (providers and dependencies as
 | Annotation | On | Meaning |
 |------------|----|---------|
 | `@ApplicationContext` | a `class` | The root of the graph. Generated accessors are added to it as an extension. One per target. |
-| `@Service` | a `class`, `struct` or `actor` | Register the type. Its initializer parameters are injected by type. |
+| `@Service` | a `class`, `struct` or `actor` | Register the type. Its initializer parameters are injected by type; `autoInit: true` generates that initializer from the stored properties. |
 | `@Configuration` | an `enum`, `struct`, `class` or `actor` | Holds `@Bean` factories. |
 | `@Bean` | a `static func` in a `@Configuration` | Register the return value. Use it for types you don't own (`URLSession`, third-party clients) or that need custom setup. |
 | `@Inject` | an `init` | Pick the initializer the graph calls when a service has several. |
-| `@Assisted` | an initializer or `@Bean` parameter | A value the caller passes at creation time instead of the graph. |
+| `@Assisted` | an initializer or `@Bean` parameter, or a stored property of an `autoInit: true` service | A value the caller passes at creation time instead of the graph. |
 
 ```swift
 import SwiftBeans
@@ -94,10 +95,9 @@ enum AppConfiguration {
 	}
 }
 
-@Service
+@Service(autoInit: true)
 final class UserService {
-	private let apiClient: any APIClient
-	init(apiClient: any APIClient) { self.apiClient = apiClient }
+	private let apiClient: any APIClient // `autoInit: true` writes `init(apiClient:)` for you
 }
 
 @ApplicationContext
@@ -122,7 +122,7 @@ extension AppContext {
 
 Accessor names come from the type: `UserService` → `userService`, `URLSession` → `urlSession`, `Outer.Inner` → `outerInner`, `[User]` → `userArray`, `[String: Int]` → `stringIntDictionary`.
 
-Your types stay plain Swift: tests can call `UserService(apiClient: FakeAPIClient())` directly, without any context.
+Without `autoInit`, write the `init` yourself (`init(apiClient: any APIClient) { self.apiClient = apiClient }`); see [Auto-generated initializers](#auto-generated-initializers). Your types stay plain Swift: tests can call `UserService(apiClient: FakeAPIClient())` directly, without any context.
 
 ## Scopes
 
@@ -183,6 +183,34 @@ Analytics(trackers: [self.consoleTracker, self.firebaseTracker])
 - A bean that provides `[P]` itself (`@Bean static func trackers() -> [any AnalyticsTracker]`) wins over the members, and `@Bean static func tags() -> [String]` stays an ordinary bean.
 - No members: `[any P]` gets `[]`; `[P]` without `any` (e.g. `[String]`) is a missing dependency. A defaulted collection keeps its default.
 - Assisted beans are never members, and a bean is never a member of its own collection (so a composite `@Service(boundTo: P.self)` can wrap all the others).
+
+## Auto-generated initializers
+
+`@Service(autoInit: true)` generates the memberwise `init` for a `class`, `struct` or `actor`, so you only declare the stored properties. The generated initializer is what the graph calls, and tests can call it directly with the property names as labels.
+
+```swift
+@Service(autoInit: true)
+@MainActor @Observable
+final class ItemDetailViewModel {
+	private let repository: any ItemRepository
+	@Assisted private(set) var item: Item
+	@Qualifier("snakeCase") private let decoder: JSONDecoder
+	private(set) var state: LoadState = .idle // has a value: not a parameter
+}
+// init(repository: any ItemRepository, @Assisted item: Item, @Qualifier("snakeCase") decoder: JSONDecoder)
+```
+
+- Included: instance stored `let` and `var` properties without an initial value, in declaration order.
+- Skipped: `static`/`class`, `lazy`, computed properties, and any property that already has a value (`let x = 1`, `var y = 0`).
+- An optional `var` without a value becomes a parameter with a `= nil` default. An optional `let` without a value is a plain parameter.
+- The initializer is `internal`, or `public`/`package` when the type is; `private` properties still become parameters.
+- `@Assisted` and `@Qualifier("name")` go on the property and are moved onto the generated parameter.
+- An optional `var x: T?` without a value becomes an optional injected dependency. Give private optional state an initial value (`private var task: Task<Void, Never>? = nil`) to keep it out of the init.
+- A function-typed property gets `@escaping` automatically, so `private let makeItem: @MainActor () -> Item` works as a factory. Spell the closure type out: a `typealias` for a closure type is not recognized, so the generated init fails to compile with "assigning non-escaping parameter 'make' to an '@escaping' closure". Use the full type or write the `init` yourself.
+- It is an error to combine `autoInit: true` with a hand-written `init`, with an attribute on a stored property other than `@ObservationIgnored`, `@available`, `@Assisted` and `@Qualifier`, or with destructuring patterns and untyped properties.
+- Subclasses work when the superclass has a zero-argument designated `init` (Swift calls `super.init()` implicitly). Otherwise write the `init` by hand.
+
+Write the `init` by hand when it does more than store parameters: derives values from them, starts work, supplies a default non-optional parameter value, has several initializers selected with `@Inject`, or needs property-wrapper storage.
 
 ## Choosing an initializer: `@Inject`
 

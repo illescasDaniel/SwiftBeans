@@ -27,6 +27,7 @@ final class FeaturesDemoViewModel {
 	private(set) var sampleTitle: String?
 	private(set) var state: LoadState = .idle
 
+	// Hand-written init: it derives display strings from injected beans.
 	init(
 		repository: ItemRepository,
 		welcomeBanner: Features.WelcomeBanner,

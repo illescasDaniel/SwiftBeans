@@ -83,6 +83,9 @@ let package = Package(
 			name: "SwiftBeansGeneratorCoreTests",
 			dependencies: [
 				"SwiftBeansGeneratorCore",
+				"SwiftBeansSyntaxRules",
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+				.product(name: "SwiftParser", package: "swift-syntax"),
 			],
 			swiftSettings: [
 				.enableUpcomingFeature("ApproachableConcurrency"),
@@ -94,9 +97,19 @@ let package = Package(
 			plugins: [.plugin(name: "SwiftBeansPlugin")]
 		),
 		.testTarget(
+			name: "SwiftBeansAutoInitIntegrationTests",
+			dependencies: ["SwiftBeans"],
+			// The root context is @MainActor, so its generated protocol needs the same isolation.
+			swiftSettings: [.defaultIsolation(MainActor.self)],
+			plugins: [.plugin(name: "SwiftBeansPlugin")]
+		),
+		.testTarget(
 			name: "SwiftBeansMacrosTests",
 			dependencies: [
 				"SwiftBeansMacros",
+				"SwiftBeansSyntaxRules",
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+				.product(name: "SwiftParser", package: "swift-syntax"),
 				.product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
 			]
 		),

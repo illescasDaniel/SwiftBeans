@@ -3,16 +3,11 @@ import HTTIES
 import SwiftBeans
 
 /// Fetches posts via HTTIES. Bound to `ItemRepository` for the use-case layer.
-@Service(boundTo: ItemRepository.self)
+@Service(boundTo: ItemRepository.self, autoInit: true)
 final class JSONPlaceholderItemRepository: ItemRepository, Sendable {
 	private let httpClient: any HTTPClient
 	private let baseURL = URL(string: "https://jsonplaceholder.typicode.com")!
 	private let decoder: JSONDecoder
-
-	init(httpClient: any HTTPClient, decoder: JSONDecoder) {
-		self.httpClient = httpClient
-		self.decoder = decoder
-	}
 
 	func fetchItems() async throws -> [Item] {
 		let request = try HTTPURLRequest(url: baseURL / "posts")

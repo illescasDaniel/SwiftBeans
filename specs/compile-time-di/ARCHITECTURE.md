@@ -62,7 +62,8 @@ The package exports exactly two products: library `SwiftBeans` and plugin `Swift
 | Missing / duplicate / cycle / accessor-collision checks, initializer selection, `#if` and public-ness checks, `@Bean` outside `@Configuration` | **Generator** | Needs other declarations (extensions, other files, origin of the file) |
 | Emit accessors + singleton storage on the context type | **Generator** → `SwiftBeansGenerated.swift` | Cross-cutting; written as a normal `extension` on the user’s context type |
 | Emit `{ContextTypeName}Protocol` + `extension Context: Protocol` | **Generator** → same file | Testable / Preview seam; same getters (and assisted methods) as accessors; fakes are user-owned. The protocol is top-level and named after the context's last name component (`App.Context` → `ContextProtocol`); the extension uses the qualified name |
-| `@Assisted` usage: default value / `inout` / variadic on an assisted parameter, `@Assisted` on a stored property, explicit `scope: .singleton` on an assisted provider, an assisted key injected into another bean | **Generator** only (SPEC Assisted providers, rule 9) | The selected initializer may live in another file, and `@Assisted` is a property wrapper, not a macro, so there is nothing for a macro to attach to. `SwiftBeansSyntaxRules` only supplies the recognizer |
+| `@Assisted` usage: default value / `inout` / variadic on an assisted parameter, explicit `scope: .singleton` on an assisted provider, an assisted key injected into another bean | **Generator** only (SPEC Assisted providers, rule 9) | The selected initializer may live in another file, and on a parameter `@Assisted` is a property wrapper, not a macro, so there is nothing for a macro to attach to. `SwiftBeansSyntaxRules` only supplies the recognizer |
+| `@Assisted` / `@Qualifier` on a stored property (`assisted.property` / `qualifier.property`) | **Macro** (marker peer macros of the same names), via `SwiftBeansSyntaxRules.propertyMarkerViolations` | Valid only on stored properties of an `@Service(autoInit: true)` type (specs/service-auto-init). Parameters still resolve to the property wrappers. The generator no longer reports these two IDs |
 | Optional peer helpers on a single type | Macros | Keep expansions small; prefer generator for graph output |
 
 Macros are **not** the discovery engine. They are the public attribute API plus local checks. The generator is the Spring “component scan.”
@@ -270,7 +271,7 @@ struct ScannedFile {
 	var extensions: [ExtensionDecl]      // extended type's qualified spelling + members
 	var annotated: [AnnotatedDecl]       // @Service / @Configuration / @Bean / @Inject that passed SyntaxRules
 	var conditionalAnnotations: [Location] // annotated decls under #if → "#if not supported" diagnostics
-	var assistedPropertyLocations: [SourcePosition] // `@Assisted` on stored properties of scanned types → `assisted.property`
+	// (`assistedPropertyLocations` was removed by specs/service-auto-init: the marker macros own `assisted.property`.)
 	var imports: [ImportRecord]
 }
 
@@ -297,7 +298,7 @@ struct ParameterInfo {
 
 `ServiceDecl.scope` / `BeanDecl.scope` still default to `.singleton` when `scope:` is absent or non-literal. `scopeLocation` is what lets the resolver tell an explicit `.singleton` (error on an assisted provider) from the default (silently transient). A non-literal `scope:` has a `scopeLocation` but is the macro's error, so the resolver ignores it for `assisted.singleton`; only a literal `.singleton` is reported.
 
-The scanner records `@Assisted` on stored properties of every scanned class/struct/actor/enum into `assistedPropertyLocations` (the attribute's position). Whether the type is a `@Service` is irrelevant ("scanned type" in the SPEC means any type in the scan set).
+(Superseded by specs/service-auto-init: the scanner no longer records `@Assisted` on stored properties; the marker macros report `assisted.property`.)
 
 - **Qualified names:** a declaration's name is the chain of enclosing type / extension names joined with `.` (`extension Outer { class Inner }` → `Outer.Inner`).
 - **Origin:** `.target` files supply root contexts and providers; `.localPackage(module:)` files supply providers only (their contexts are ignored) and trigger the public-ness checks and the module import.
@@ -382,10 +383,9 @@ struct AssistedArgument {
   | `assisted.default` | the default value (`defaultLocation`) | assisted parameter has a default |
   | `assisted.variadic` | the parameter | assisted parameter is variadic |
   | `assisted.inout` | the parameter | assisted parameter is `inout` |
-  | `assisted.property` | the attribute (`assistedPropertyLocations`) | `@Assisted` on a stored property of a scanned type |
 
-  A provider with one of the first four errors is still emitted best-effort (so the graph checks that follow do not cascade into spurious missing-dependency errors); no output is generated anyway because errors exist.
-- For memberwise initializers, a stored property carrying `@Assisted` is already `assisted.property`; it is not also treated as an assisted parameter.
+  A provider with one of these errors is still emitted best-effort (so the graph checks that follow do not cascade into spurious missing-dependency errors); no output is generated anyway because errors exist.
+- For memberwise initializers, a stored property carrying `@Assisted` / `@Qualifier` is not treated as a parameter (the marker macros report it unless the service uses `autoInit: true`).
 - **Public-ness** (local packages only): type modifier `public`/`open`, initializer `public`; for `@Bean`, configuration type `public` and function `public`.
 - **`@Bean` placement**: the enclosing type (declared or extended) must be a `@Configuration` type somewhere in the scan set.
 

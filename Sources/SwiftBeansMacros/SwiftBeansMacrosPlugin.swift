@@ -11,5 +11,7 @@ struct SwiftBeansMacrosPlugin: CompilerPlugin {
 		BeanMacro.self,
 		ServiceMacro.self,
 		InjectMacro.self,
+		AssistedMarkerMacro.self,
+		QualifierMarkerMacro.self,
 	]
 }

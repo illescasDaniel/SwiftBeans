@@ -17,10 +17,6 @@ struct ScannedFile {
 	var beans: [BeanDecl] = []
 	/// Annotated declarations under `#if` (not supported in v1).
 	var conditionalDecls: [SourcePosition] = []
-	/// `@Assisted` on stored properties of scanned types (parameters only; SPEC Assisted providers, rule 7).
-	var assistedPropertyLocations: [SourcePosition] = []
-	/// `@Qualifier` on stored properties of scanned types (parameters only; qualifiers SPEC).
-	var qualifierPropertyLocations: [SourcePosition] = []
 	var imports: [ImportRecord] = []
 	/// Initializer bodies of every scanned type (and extension), for the inter-bean call diagnostic.
 	var initializerBodies: [InitializerBody] = []
@@ -287,6 +283,7 @@ struct DeclarationScanner {
 		let service = SwiftBeansSyntaxRules.find(.service, in: attributes)
 		let configuration = SwiftBeansSyntaxRules.find(.configuration, in: attributes)
 		let location = position(decl)
+		var autoInit: Result<AutoInitModel, AutoInitViolations>?
 
 		if conditional, context != nil || child != nil || service != nil || configuration != nil {
 			result.conditionalDecls.append(location)
@@ -302,7 +299,8 @@ struct DeclarationScanner {
 			}
 			if let service {
 				if let owner = recordOwner(service, scope: enclosing?.name ?? "") { result.owners[location] = owner }
-				recordService(decl, attribute: service, typeName: name, location: location)
+				autoInit = autoInitModel(group, service: service)
+				recordService(decl, attribute: service, autoInit: autoInit, typeName: name, location: location)
 			}
 		}
 
@@ -312,18 +310,21 @@ struct DeclarationScanner {
 		if kind == .struct {
 			(memberwise, hasWrappedProperty) = memberwiseParameters(members)
 		}
+		var declaredInitializers = initializers(in: members)
+		if let service, case .success(let model)? = autoInit {
+			declaredInitializers.append(synthesizedInitializer(model, service: service))
+		}
 		result.types.append(TypeDecl(
 			name: name,
 			kind: kind,
 			isConfiguration: configuration != nil && !conditional,
 			isPublic: group.modifiers.contains { isPublicModifier($0) },
-			initializers: initializers(in: members),
+			initializers: declaredInitializers,
 			memberwise: memberwise,
 			hasWrappedProperty: hasWrappedProperty,
 			location: location,
 			inheritedTypes: inheritedTypes(group.inheritanceClause)
 		))
-		recordMarkerProperties(members)
 		recordInitializerBodies(members, typeName: name)
 		walkMembers(members, enclosing: .type(name), conditional: conditional)
 	}
@@ -370,27 +371,31 @@ struct DeclarationScanner {
 		))
 	}
 
-	/// `@Assisted` and `@Qualifier` belong on parameters; on a stored property they are errors.
-	private mutating func recordMarkerProperties(_ members: MemberBlockItemListSyntax) {
-		for member in members {
-			guard let variable = member.decl.as(VariableDeclSyntax.self),
-			      variable.bindings.contains(where: { isStored($0) })
-			else { continue }
-			for case .attribute(let attribute) in variable.attributes {
-				if SwiftBeansSyntaxRules.isAssisted(attribute) {
-					result.assistedPropertyLocations.append(position(attribute))
-				} else if SwiftBeansSyntaxRules.isQualifier(attribute) {
-					result.qualifierPropertyLocations.append(position(attribute))
-				}
-			}
-		}
+	/// The shared auto-init model when the service writes `autoInit: true`; `nil` otherwise.
+	private func autoInitModel(_ group: some DeclGroupSyntax, service: AttributeSyntax) -> Result<AutoInitModel, AutoInitViolations>? {
+		guard case .success(true) = SwiftBeansSyntaxRules.autoInit(of: service) else { return nil }
+		return SwiftBeansSyntaxRules.autoInitModel(group)
 	}
 
-	private mutating func recordService(_ decl: DeclSyntax, attribute: AttributeSyntax, typeName: String, location: SourcePosition) {
-		// Wrong kind, generic types and bad names are the macro's errors; they cannot be wired.
-		let skipped: Set<String> = ["service.wrongKind", "service.generic", "qualifier.notLiteral", "qualifier.invalidName"]
+	private mutating func recordService(_ decl: DeclSyntax, attribute: AttributeSyntax, autoInit: Result<AutoInitModel, AutoInitViolations>?, typeName: String, location: SourcePosition) {
+		// Wrong kind, generic types, bad names and invalid auto-init declarations are the macro's errors; they cannot be wired.
+		let skipped: Set<String> = ["service.wrongKind", "service.generic", "service.autoInit", "qualifier.notLiteral", "qualifier.invalidName"]
 		guard !SwiftBeansSyntaxRules.serviceViolations(decl, attribute: attribute).contains(where: { skipped.contains($0.id) }) else {
 			return
+		}
+		switch autoInit {
+		case .failure:
+			return
+		case .success(let model):
+			// A property marker with a bad qualifier name is reported by the marker macro.
+			let hasInvalidQualifier = model.parameters.contains { parameter in
+				guard let qualifier = parameter.qualifier else { return false }
+				if case .failure = SwiftBeansSyntaxRules.qualifierName(of: qualifier) { return true }
+				return false
+			}
+			if hasInvalidQualifier { return }
+		case nil:
+			break
 		}
 		var boundTo: ServiceDecl.BoundTo?
 		if let arguments = attribute.arguments?.as(LabeledExprListSyntax.self),
@@ -502,29 +507,70 @@ struct DeclarationScanner {
 
 	private func parameters(_ list: FunctionParameterListSyntax) -> [ParameterInfo] {
 		list.map { parameter in
-			let label = parameter.firstName.tokenKind == .wildcard ? nil : parameter.firstName.text
-			let hasDefault = parameter.defaultValue != nil
-			let isInout = parameter.type.as(AttributedTypeSyntax.self)?.specifiers.contains {
-				$0.as(SimpleTypeSpecifierSyntax.self)?.specifier.tokenKind == .keyword(.inout)
-			} == true
-			return ParameterInfo(
-				label: label,
-				internalName: (parameter.secondName ?? parameter.firstName).text,
-				hasDefault: hasDefault,
+			parameterInfo(
+				parameter,
 				location: position(parameter),
 				typeLocation: position(parameter.type),
-				key: KeyNormalization.key(for: keyType(parameter.type, hasDefault: hasDefault)),
-				elementSpelledWithAny: KeyNormalization.elementSpelledWithAny(keyType(parameter.type, hasDefault: hasDefault)),
-				typeSpelling: parameter.type.trimmedDescription,
-				canonicalType: KeyNormalization.canonicalSpelling(of: parameter.type),
-				factory: FactoryNormalization.factory(for: parameter.type),
-				isAssisted: SwiftBeansSyntaxRules.isAssisted(parameter),
-				qualifier: SwiftBeansSyntaxRules.qualifierAttribute(in: parameter.attributes).map(qualifierUse),
-				isVariadic: parameter.ellipsis != nil,
-				isInout: isInout,
+				qualifier: SwiftBeansSyntaxRules.qualifierAttribute(in: parameter.attributes),
 				defaultLocation: parameter.defaultValue.map { position($0.value) }
 			)
 		}
+	}
+
+	/// The candidate for an `autoInit: true` service: the initializer the macro emits, read through the
+	/// same conversion as a written one. Synthesized nodes have no source position, so each parameter
+	/// points at its stored property, and the initializer at the `autoInit:` argument.
+	private func synthesizedInitializer(_ model: AutoInitModel, service: AttributeSyntax) -> InitializerInfo {
+		let argument = service.arguments?.as(LabeledExprListSyntax.self)?.first { $0.label?.text == "autoInit" }
+		let list = model.initializer.signature.parameterClause.parameters
+		let parameters = zip(list, model.parameters).map { parameter, source in
+			parameterInfo(
+				parameter,
+				location: position(source.binding),
+				typeLocation: source.binding.typeAnnotation.map { position($0.type) } ?? position(source.binding),
+				qualifier: source.qualifier,
+				defaultLocation: parameter.defaultValue == nil ? nil : position(source.binding)
+			)
+		}
+		return InitializerInfo(
+			location: argument.map { position($0) } ?? position(service),
+			isInject: false,
+			isPublic: model.accessModifier == .public,
+			isCandidate: true,
+			hasEffects: false,
+			parameters: parameters
+		)
+	}
+
+	private func parameterInfo(
+		_ parameter: FunctionParameterSyntax,
+		location: SourcePosition,
+		typeLocation: SourcePosition,
+		qualifier: AttributeSyntax?,
+		defaultLocation: SourcePosition?
+	) -> ParameterInfo {
+		let label = parameter.firstName.tokenKind == .wildcard ? nil : parameter.firstName.text
+		let hasDefault = parameter.defaultValue != nil
+		let isInout = parameter.type.as(AttributedTypeSyntax.self)?.specifiers.contains {
+			$0.as(SimpleTypeSpecifierSyntax.self)?.specifier.tokenKind == .keyword(.inout)
+		} == true
+		return ParameterInfo(
+			label: label,
+			internalName: (parameter.secondName ?? parameter.firstName).text,
+			hasDefault: hasDefault,
+			location: location,
+			typeLocation: typeLocation,
+			key: KeyNormalization.key(for: keyType(parameter.type, hasDefault: hasDefault)),
+			elementSpelledWithAny: KeyNormalization.elementSpelledWithAny(keyType(parameter.type, hasDefault: hasDefault)),
+			typeSpelling: parameter.type.trimmedDescription,
+			canonicalType: KeyNormalization.canonicalSpelling(of: parameter.type),
+			factory: FactoryNormalization.factory(for: parameter.type),
+			isAssisted: SwiftBeansSyntaxRules.isAssisted(parameter),
+			qualifier: qualifier.map(qualifierUse),
+			isVariadic: parameter.ellipsis != nil,
+			isInout: isInout,
+			defaultLocation: defaultLocation
+		)
 	}
 
 	/// Stored properties in declaration order, as memberwise parameters.
@@ -537,7 +583,7 @@ struct DeclarationScanner {
 			if modifiers.contains(.keyword(.static)) || modifiers.contains(.keyword(.class)) || modifiers.contains(.keyword(.lazy)) {
 				continue
 			}
-			// `@Assisted` / `@Qualifier` on a property is reported by `recordMarkerProperties`; it is not a parameter.
+			// `@Assisted` / `@Qualifier` on a property of a service without `autoInit: true` is the marker macros' error; it is not a parameter.
 			if variable.attributes.contains(where: { element in
 				if case .attribute(let attribute) = element {
 					return SwiftBeansSyntaxRules.isAssisted(attribute) || SwiftBeansSyntaxRules.isQualifier(attribute)

@@ -11,6 +11,7 @@ final class AuthenticationService {
 	}
 	private let authenticate: @MainActor (String) async throws -> SessionCredentials
 
+	// Hand-written init: the default closure value is not expressible in auto-init.
 	init(
 		authenticate: @escaping @MainActor (String) async throws -> SessionCredentials = { name in
 			let name = name.trimmingCharacters(in: .whitespacesAndNewlines)

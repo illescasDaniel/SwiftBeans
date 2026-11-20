@@ -4,6 +4,7 @@ import SwiftBeans
 ///
 /// The other (`init(tags:)`) needs `[String]`, which the graph does not provide,
 /// so picking it would fail the build.
+// Hand-written inits: auto-init cannot express an `@Inject` choice between two initializers.
 @Service
 final class TagSummary: Sendable {
 	let tagCounts: [String: Int]

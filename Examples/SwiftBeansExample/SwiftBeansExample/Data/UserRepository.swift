@@ -13,6 +13,7 @@ final class UserRepository: ContextCleanup {
 	private(set) var isClosed = false
 	@ObservationIgnored private var work: Task<Void, Never>?
 
+	// Hand-written init: it starts the heartbeat task, which auto-init cannot do.
 	init(credentials: SessionCredentials, catalog: any ItemRepository) {
 		self.credentials = credentials
 		self.catalog = catalog

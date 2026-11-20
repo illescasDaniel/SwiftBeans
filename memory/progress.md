@@ -1,5 +1,9 @@
 # Progress
 
+## Service auto-init (2026-11-20)
+
+- [x] `@Service(..., autoInit: true)` generates the initializer; `@Assisted`/`@Qualifier` marker macros work on `let` properties. Example and README adopted it; independent grade passed after one fix round (356 tests).
+
 ## Codex MCP configuration (2026-10-25)
 
 - [x] Exposed all nine project skills through individual `.agents/skills/` symlinks to `.cursor/skills/`, retaining Claude's existing shared source; verified every `SKILL.md` resolves to its original and documented maintenance in `AGENTS.md`.

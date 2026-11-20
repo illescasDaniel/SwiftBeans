@@ -1,6 +1,6 @@
 # Active Context
 
-_Last updated: 2026-10-25_
+_Last updated: 2026-11-20_
 
 ## Branch
 
@@ -40,5 +40,9 @@ plugin/lifecycle integration and example tests.
 
 ## Next steps
 
-1. No feature implementation remains; await user direction after this handoff.
-2. Other backlog stays in `progress.md`; later child-context phases remain outside A1/A2.
+1. **Service auto-init:** `@Service(..., autoInit: true)` was implemented on 2026-11-20 (design, spec,
+	architecture, implementation and review are in `design/` and `specs/service-auto-init/`). 356 tests
+	pass, and the example passes on macOS and builds for iOS Simulator. The Phase 4 spec amendment still
+	needs the user's approval.
+2. Queued by the user: run create-repo-skill on the README, migrate memory/docs to memory-1 and
+	docs-1, push, get CI green, release 0.3.0, then update Steady to 0.3.0 with auto-init.

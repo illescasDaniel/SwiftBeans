@@ -18,15 +18,11 @@ nonisolated struct SnakeCaseTitle: Decodable, Sendable {
 }
 
 /// Reads a snake_case payload with the named decoder, not the unqualified one.
-@Service
+@Service(autoInit: true)
 final class SnakeCaseReader: Sendable {
 	static let sampleJSON = Data(#"{"post_title":"Named decoder"}"#.utf8)
 
-	private let decoder: JSONDecoder
-
-	init(@Qualifier("snakeCase") decoder: JSONDecoder) {
-		self.decoder = decoder
-	}
+	@Qualifier("snakeCase") private let decoder: JSONDecoder
 
 	func title(from json: Data) throws -> String {
 		try decoder.decode(SnakeCaseTitle.self, from: json).postTitle
@@ -34,6 +30,7 @@ final class SnakeCaseReader: Sendable {
 }
 
 /// Unqualified `Greeter` plus `@Qualifier("short")`.
+// Hand-written init: it derives strings from the injected greeters instead of storing them.
 @Service
 final class GreetingStyles: Sendable {
 	let standard: String
@@ -52,19 +49,18 @@ protocol TagSource: Sendable {
 }
 
 /// Concrete type qualified by name. Accessor: `builtinStaticTagSource`.
-@Service(named: "builtin")
+@Service(named: "builtin", autoInit: true)
 final class StaticTagSource: TagSource, Sendable {
 	let label = "builtin"
-	init() {}
 }
 
 /// Protocol binding qualified by name. Accessor: `remoteTagSource` as `TagSource`.
-@Service(boundTo: TagSource.self, named: "remote")
+@Service(boundTo: TagSource.self, named: "remote", autoInit: true)
 final class RemoteTagSource: TagSource, Sendable {
 	let label = "remote"
-	init() {}
 }
 
+// Hand-written init: it reads labels off the injected sources instead of storing them.
 @Service
 final class TagSourcePair: Sendable {
 	let builtinLabel: String
@@ -87,30 +83,26 @@ protocol FeatureNote: Sendable {
 	var detail: String { get }
 }
 
-@Service
+@Service(autoInit: true)
 final class AssistedFeatureNote: FeatureNote, Sendable {
 	let title = "@Assisted"
 	let detail = "ItemDetailViewModel(item:) takes the selected post at the call site."
-	init() {}
 }
 
-@Service
+@Service(autoInit: true)
 final class CollectionFeatureNote: FeatureNote, Sendable {
 	let title = "Collections"
 	let detail = "This list is every FeatureNote bean, in accessor-name order."
-	init() {}
 }
 
-@Service
+@Service(autoInit: true)
 final class FactoryFeatureNote: FeatureNote, Sendable {
 	let title = "Factories"
 	let detail = "AppCoordinator takes () -> ItemListViewModel and (Item) -> ItemDetailViewModel."
-	init() {}
 }
 
-@Service
+@Service(autoInit: true)
 final class QualifierFeatureNote: FeatureNote, Sendable {
 	let title = "@Qualifier"
 	let detail = "snakeCaseJSONDecoder is a second JSONDecoder, asked for by name."
-	init() {}
 }

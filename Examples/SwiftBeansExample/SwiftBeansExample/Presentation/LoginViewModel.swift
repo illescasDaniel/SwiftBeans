@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftBeans
 
-@Service(scope: .transient)
+@Service(scope: .transient, autoInit: true)
 @Observable
 @MainActor
 final class LoginViewModel {
@@ -10,9 +10,7 @@ final class LoginViewModel {
 	private(set) var state: LoadState = .idle
 	private let authentication: AuthenticationService
 	// Protects model presentation; AppSession separately guards admission of an authenticated flow.
-	private var attempt: UUID?
-
-	init(authentication: AuthenticationService) { self.authentication = authentication }
+	private var attempt: UUID? = nil // an initial value keeps private state out of the generated init
 
 	func authenticate() async -> SessionCredentials? {
 		let identity = UUID()

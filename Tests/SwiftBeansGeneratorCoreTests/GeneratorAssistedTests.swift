@@ -187,33 +187,31 @@ struct GeneratorAssistedTests {
 				final class WithInout {
 					init(@Assisted item: inout Item) {}
 				}
-				"""),
-			appFile("/App/Property.swift", """
-				@Service
-				final class WithProperty {
-					@Assisted var item: Item
-					init() {}
-				}
 				""")
 		)
 		#expect(result.output == nil)
 		#expect(result.errorSummary == [
 			"assisted.default /App/Default.swift:3:30",
 			"assisted.inout /App/Inout.swift:3:7",
-			"assisted.property /App/Property.swift:3:2",
 			"assisted.variadic /App/Variadic.swift:3:7",
 		])
 	}
 
 	@Test
-	func `Given a memberwise struct with an assisted property When generated Then only the property error is reported`() {
+	func `Given an assisted property in a service without auto-init When generated Then the generator is silent because the macro reports it`() {
 		let result = generateWithContext(appFile("/App/Row.swift", """
 			@Service
 			struct Row {
 				@Assisted let item: Item
 			}
+
+			@Service
+			final class WithProperty {
+				@Assisted var item: Item
+				init() {}
+			}
 			"""))
-		#expect(result.errorSummary == ["assisted.property /App/Row.swift:3:2"])
+		#expect(result.errors.isEmpty, "\(result.renderedDiagnostics)")
 	}
 
 	// MARK: - Recognition and edge cases
