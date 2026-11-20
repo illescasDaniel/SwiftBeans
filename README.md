@@ -1,16 +1,35 @@
-# SwiftBeans
+<p align="center">
+	<img src="assets/icon.svg" width="96" height="96" alt="SwiftBeans icon: a white bean with a small dependency graph on an orange rounded square">
+</p>
 
-[![CI](https://github.com/illescasDaniel/SwiftBeans/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/illescasDaniel/SwiftBeans/actions/workflows/ci.yml)
+<h1 align="center">SwiftBeans</h1>
 
-Spring-style dependency injection for Swift, wired at **compile time**.
+<p align="center">Spring-style dependency injection for Swift, wired at <b>compile time</b>.</p>
+
+<p align="center">
+	<a href="https://github.com/illescasDaniel/SwiftBeans/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/illescasDaniel/SwiftBeans/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+	<a href="https://github.com/illescasDaniel/SwiftBeans/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/illescasDaniel/SwiftBeans"></a>
+	<a href="Package.swift"><img alt="Swift 6.4 toolchain" src="https://img.shields.io/badge/Swift-6.4-F05138?logo=swift&logoColor=white"></a>
+	<a href="#installation"><img alt="Swift Package Manager" src="https://img.shields.io/badge/SPM-compatible-brightgreen"></a>
+	<a href="Package.swift"><img alt="Platforms: iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Catalyst 18" src="https://img.shields.io/badge/platforms-iOS%2018%20%7C%20macOS%2015%20%7C%20tvOS%2018%20%7C%20watchOS%2011%20%7C%20Catalyst%2018-blue"></a>
+	<a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-lightgrey"></a>
+</p>
 
 You annotate types and factories. A build tool plugin scans your target, checks the graph, and generates plain Swift accessors on your context. A missing, duplicate or cyclic dependency fails the build with a clickable `file:line:column` error. There is no runtime container and no `resolve(Type.self)`.
+
+![Diagram: annotated Swift sources are scanned and validated by SwiftBeansPlugin at build time, which then generates typed accessors on your context.](assets/how-it-works.svg)
+
+Text version: (1) you annotate types with `@Service`, `@Configuration`/`@Bean` and one `@ApplicationContext`; (2) the plugin scans the target and validates the graph, failing the build on a missing, duplicate or cyclic dependency; (3) the build generates typed accessors such as `context.userService`.
+
+## Quick start
+
+[Install the package and plugin](#installation), then annotate and use:
 
 ```swift
 @ApplicationContext
 final class AppContext {}
 
-@Service(autoInit: true)
+@Service(autoInit: true) // recommended: generates `init(apiClient:)` from the stored properties
 final class UserService {
 	private let apiClient: any APIClient
 }
@@ -19,25 +38,31 @@ let context = AppContext()
 let users = context.userService // generated, type-checked, no lookup
 ```
 
-Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Catalyst 18.
+`APIClient` needs a provider too, for example a `@Bean` (see [Concepts](#concepts)). If it is missing, the build fails and tells you where.
+
+Requirements: Swift 6.4 toolchain; iOS 18, macOS 15, tvOS 18, watchOS 11, Mac Catalyst 18. CI runs `swift test` plus the example app tests on macOS and an iOS Simulator build.
 
 ## Contents
 
+- [Quick start](#quick-start)
 - [Installation](#installation)
 - [Concepts](#concepts)
 - [Scopes](#scopes)
-- [Child contexts: login lifetime](#child-contexts-login-lifetime)
 - [Binding to protocols](#binding-to-protocols)
 - [Collections: every bean of a kind](#collections-every-bean-of-a-kind)
 - [Auto-generated initializers](#auto-generated-initializers)
 - [Choosing an initializer: `@Inject`](#choosing-an-initializer-inject)
 - [Runtime arguments: `@Assisted`](#runtime-arguments-assisted)
+- [Qualifiers: several beans of one type](#qualifiers-several-beans-of-one-type)
 - [Factories: `(Item) -> T` and `() -> T`](#factories-item---t-and----t)
+- [Child contexts: login lifetime](#child-contexts-login-lifetime)
 - [Testing and Previews: `{Context}Protocol`](#testing-and-previews-contextprotocol)
 - [Beans from local packages: `.swiftbeans.yml`](#beans-from-local-packages-swiftbeansyml)
 - [Rules worth knowing](#rules-worth-knowing)
 - [Example app](#example-app)
+- [Development and tests](#development-and-tests)
 - [Project docs](#project-docs)
+- [License](#license)
 
 ## Installation
 
@@ -422,10 +447,20 @@ local_packages:
 cd Examples/SwiftBeansExample && xcodebuild test -project SwiftBeansExample.xcodeproj -scheme SwiftBeansExample -destination 'platform=macOS' -skipPackagePluginValidation -skipMacroValidation
 ```
 
+## Development and tests
+
+```bash
+swift test
+```
+
+Example app tests: see the command under [Example app](#example-app). The project uses spec-driven development: [AGENTS.md](AGENTS.md) describes the phase gates.
+
 ## Project docs
 
 - [SPEC](specs/compile-time-di/SPEC.md): behavior, generator rules and acceptance scenarios.
 - [ARCHITECTURE](specs/compile-time-di/ARCHITECTURE.md): module seams, generator pipeline, generated code shape.
+- [Auto-init spec](specs/service-auto-init/SPEC.md): `@Service(autoInit: true)`.
+- [CHANGELOG](CHANGELOG.md): what changed per release.
 - [AGENTS.md](AGENTS.md): how this repo is developed (spec-driven, phase gates).
 
 ## License

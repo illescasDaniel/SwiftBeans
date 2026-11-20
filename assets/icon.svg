@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t d">
+	<title id="t">SwiftBeans icon</title>
+	<desc id="d">A coffee-bean shaped green bean with a connected three-node dependency graph drawn on it.</desc>
+	<rect width="128" height="128" rx="28" fill="#F05138"/>
+	<ellipse cx="64" cy="64" rx="34" ry="46" transform="rotate(35 64 64)" fill="#FFFFFF"/>
+	<g stroke="#F05138" stroke-width="5" stroke-linecap="round" fill="none">
+		<path d="M50 80 L64 58 L80 74"/>
+	</g>
+	<g fill="#F05138">
+		<circle cx="50" cy="80" r="7"/>
+		<circle cx="64" cy="58" r="7"/>
+		<circle cx="80" cy="74" r="7"/>
+	</g>
+</svg>

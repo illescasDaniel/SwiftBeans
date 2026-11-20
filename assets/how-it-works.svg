@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" width="760" height="200" role="img" aria-labelledby="t d" font-family="-apple-system, Helvetica, Arial, sans-serif">
+	<title id="t">How SwiftBeans works</title>
+	<desc id="d">Three steps from left to right: annotated Swift sources are scanned by the SwiftBeansPlugin at build time, which validates the graph and either fails the build with a file, line and column error or generates plain Swift accessors on your context.</desc>
+	<defs>
+		<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#555"/></marker>
+	</defs>
+	<rect width="760" height="200" rx="14" fill="#F6F6F8"/>
+	<g fill="#FFFFFF" stroke="#C9C9D1" stroke-width="1.5">
+		<rect x="24" y="40" width="200" height="120" rx="10"/>
+		<rect x="280" y="40" width="200" height="120" rx="10"/>
+		<rect x="536" y="40" width="200" height="120" rx="10"/>
+	</g>
+	<g fill="#1C1C1E" font-size="15" font-weight="600" text-anchor="middle">
+		<text x="124" y="68">1. You annotate</text>
+		<text x="380" y="68">2. Plugin checks</text>
+		<text x="636" y="68">3. Build generates</text>
+	</g>
+	<g fill="#3A3A3C" font-size="13" text-anchor="middle">
+		<text x="124" y="96">@Service(autoInit: true)</text>
+		<text x="124" y="116">@Configuration / @Bean</text>
+		<text x="124" y="136">@ApplicationContext</text>
+		<text x="380" y="96">scans your target</text>
+		<text x="380" y="116">missing, duplicate or</text>
+		<text x="380" y="136">cyclic: build error</text>
+		<text x="636" y="96">typed accessors</text>
+		<text x="636" y="116">context.userService</text>
+		<text x="636" y="136">no runtime container</text>
+	</g>
+	<g stroke="#555" stroke-width="2" marker-end="url(#a)">
+		<line x1="226" y1="100" x2="276" y2="100"/>
+		<line x1="482" y1="100" x2="532" y2="100"/>
+	</g>
+</svg>
