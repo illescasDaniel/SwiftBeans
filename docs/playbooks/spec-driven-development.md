@@ -1,3 +1,17 @@
+---
+id: DOC-003
+title: Spec-driven development playbook
+summary: SDD lifecycle, approval gates (design, spec, architecture), Given/When/Then and independent grade, adapted from sdd-feature-skill 5443fe5
+type: explanation
+status: current
+updated: 2026-11-20
+verified: 2026-11-20 5e3b9bf
+covers: [.cursor/skills/sdd-feature/**]
+related: [DOC-001, DOC-002]
+supersedes:
+superseded_by:
+---
+
 # Spec-Driven Development — SwiftBeans
 
 Spec-Driven Development moves important behavior decisions ahead of implementation. The approved specification is the

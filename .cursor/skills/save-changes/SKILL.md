@@ -16,10 +16,11 @@ Hand off a dirty tree: refresh `memory/`, commit, push. Do **not** force-push, s
 ## Steps
 
 1. **Memory (before staging)**
-   - Follow `.cursor/rules/agent-memory.mdc`.
-   - `progress.md` — check off completed work; add newly discovered tasks/bugs. Do not invent worktree-cleanup tasks.
-   - `activeContext.md` — rewrite so the next session can start: branch, focus, just changed, next steps, no stale blockers.
-   - `decisions.md` — append-only, newest first, only for significant technical choices made in this work. Skip if none.
+   - Follow the `memory-1` skill.
+   - `memory/NOW.md` — rewrite so the next session can start: focus, just changed, next steps, open questions, no stale blockers.
+   - `memory/LATER.md` — add newly discovered open items; delete done ones. Do not invent worktree-cleanup tasks.
+   - `memory/notes/` — one dated note per significant technical choice or reversal made in this work (supersede, do not rewrite, a changed decision); add its line to `memory/MEMORY.md`. Skip if none.
+   - Run `python3 ~/.agents/skills/memory-1/scripts/memory_check.py --memory memory` and fix what it reports.
    - Include these memory edits in the same commit as the code.
 
 2. **Review**

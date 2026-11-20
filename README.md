@@ -457,6 +457,7 @@ Example app tests: see the command under [Example app](#example-app). The projec
 
 ## Project docs
 
+- [Docs index](docs/INDEX.md): one line per doc, generated.
 - [SPEC](specs/compile-time-di/SPEC.md): behavior, generator rules and acceptance scenarios.
 - [ARCHITECTURE](specs/compile-time-di/ARCHITECTURE.md): module seams, generator pipeline, generated code shape.
 - [Auto-init spec](specs/service-auto-init/SPEC.md): `@Service(autoInit: true)`.

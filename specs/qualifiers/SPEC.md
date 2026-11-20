@@ -8,7 +8,7 @@
 | Extends | [`specs/compile-time-di/SPEC.md`](../compile-time-di/SPEC.md) (keys, accessor names, diagnostics, `{Context}Protocol`) |
 | Swift tools | 6.4 (package), SE-0293 parameter property wrappers |
 | Targets touched | `SwiftBeans` (macro overloads, `Qualifier` wrapper), `SwiftBeansSyntaxRules`, `SwiftBeansMacros`, `SwiftBeansGeneratorCore` |
-| Design notes | 2026-10-15 discussion, recorded in `memory/progress.md` |
+| Design notes | 2026-10-15 discussion, recorded in `memory/notes/qualifiers-beankey.md` |
 
 ## Goal
 
@@ -235,4 +235,4 @@ Diagnostic messages spell a qualified key as `'JSONDecoder' named "snakeCase"`.
 
 ## Phase gate
 
-Phase 1 content agreed in the 2026-10-15 discussion (`memory/progress.md`); spec, contracts, tests and implementation produced together on branch `cursor/qualifiers-53df` per the task brief, for review on the PR.
+Phase 1 content agreed in the 2026-10-15 discussion (`memory/notes/qualifiers-beankey.md`); spec, contracts, tests and implementation produced together on branch `cursor/qualifiers-53df` per the task brief, for review on the PR.

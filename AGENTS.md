@@ -6,13 +6,22 @@ This repository is a **Swift Package** for dependency injection (with macros). I
 
 Despite an early footprint, **act as if this package will grow large** (runtime, macros, plugins, docs, examples). Prefer clear module seams and tested public contracts over one-off shortcuts.
 
-## Memory bank
+## Memory and docs
 
-Project state lives in `memory/` (git-tracked, so it follows the branch). At session start, read `memory/activeContext.md` then `memory/progress.md`. Update on these triggers only: a task is completed or discovered (`progress.md`); focus changes, a blocker is hit or work concludes (`activeContext.md`); a significant technical decision is made (`decisions.md`, append-only, newest first). Full protocol: the `memory-bank` skill (and always-on `.cursor/rules/agent-memory.mdc`).
+Project memory lives in `memory/` (git-tracked, so it follows the branch) and is managed with the global **`memory-1`** skill. At session start read `memory/NOW.md` then `memory/MEMORY.md` (check `NOW.md` against `git log`). `memory/LATER.md` holds open items that are not next. Durable facts (decisions with reasons, reversals, gotchas, incidents, preferences) are one-fact notes in `memory/notes/`. Rewrite `NOW.md` before ending a session in which work happened.
 
-**Split with jevmem:** current state stays in `memory/`; dated facts that stay true (decisions with reasons, bug causes, gotchas, preferences) go to the `jevmem` MCP (`memory_write` / `memory_recall`). Never put "next step is X" in jevmem. See the `jev-memory` skill.
+**Split with jevmem:** current state stays in `memory/NOW.md`; dated facts that stay true (decisions with reasons, bug causes, gotchas, preferences) may also go to the `jevmem` MCP (`memory_write` / `memory_recall`). Never put "next step is X" in jevmem. See the `jev-memory` skill.
 
-How the files work and how to reset them on a new branch: [memory/README.md](memory/README.md).
+Project documentation lives in `docs/` and is managed with the global **`docs-1`** skill: every doc has front matter (ID, status, dates, `covers` paths) and `docs/INDEX.md` is generated. Read `docs/INDEX.md` first; before changing code run `covers` to find the docs to update. `specs/` and `design/` are SDD artifacts (see below) and are not docs-1 docs.
+
+Checks (run from the repository root; `<skills>` is the global skills folder, `~/.agents/skills`):
+
+```bash
+python3 <skills>/memory-1/scripts/memory_check.py --memory memory   # size limits, index coverage, supersession links
+python3 <skills>/docs-1/scripts/docs_index.py write                 # regenerate docs/INDEX.md
+python3 <skills>/docs-1/scripts/docs_index.py check                 # broken links, duplicate IDs, stale docs
+python3 <skills>/docs-1/scripts/docs_index.py covers <path>...      # docs that describe these files
+```
 
 ## Phase Gate Protocol
 
@@ -83,12 +92,12 @@ matching relative symlink under `.agents/skills/`.
 
 Project workflows:
 
-- `.cursor/skills/memory-bank/` — git-tracked markdown session memory ([illescasDaniel/memory-bank](https://github.com/illescasDaniel/memory-bank))
+- Global skills (not vendored here): `memory-1` (project memory in `memory/`) and `docs-1` (project docs in `docs/`)
 - `.cursor/skills/jev-memory/` — when/how to use jevmem MCP ([illescasDaniel/jev-mem](https://github.com/illescasDaniel/jev-mem))
 - `.cursor/skills/sdd-feature/` — SDD workflow for library/macro features
 - `.cursor/skills/playbooks/` — when to read playbooks vs adaptations
 - `.cursor/skills/apply-worktree/` — merge an isolated agent worktree (`/apply-worktree`)
 - `.cursor/skills/delete-worktree/` — remove a finished agent worktree (`/delete-worktree`)
-- `.cursor/skills/save-changes/` — update memory, commit, and push (`/save-changes`)
+- `.cursor/skills/save-changes/` — update memory (memory-1), commit, and push (`/save-changes`)
 - `.cursor/skills/modernize-tests/` — Swift Testing patterns
 - `.cursor/skills/audit-xcode-security-settings/` — security-oriented build settings when relevant

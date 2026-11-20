@@ -96,7 +96,7 @@ traceability in the architecture or test plan when the mapping is not obvious.
 Implement until the project's quality gate passes. For package changes, run `swift test`; use the documented Xcode
 workflow when it adds necessary macro/plugin or example-app coverage. Confirm any generated-code contract against the
 approved design and spec. If behavior needs to differ, return to the relevant approval gate. Update project memory at
-the milestones specified in `AGENTS.md` and `.cursor/rules/agent-memory.mdc`.
+the milestones specified in `AGENTS.md` (`memory-1` skill).
 
 ## Phase 5 — Independent grade
 

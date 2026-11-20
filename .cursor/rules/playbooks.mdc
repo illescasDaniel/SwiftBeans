@@ -9,7 +9,7 @@ This repo follows Spec-Driven Development. Playbooks live under `docs/playbooks/
 
 ## Before architectural or feature work
 
-1. Read `memory/activeContext.md` and `memory/progress.md` (session state; see `agent-memory.mdc`)
+1. Read `memory/NOW.md` and `memory/MEMORY.md` (session state; `memory-1` skill), and `docs/INDEX.md` (`docs-1` skill)
 2. Read `AGENTS.md` (Phase Gate Protocol)
 3. Read `docs/playbooks/SwiftBeans-adaptations.md` (project-specific overrides)
 4. Read `docs/playbooks/spec-driven-development.md` when you need deeper SDD context

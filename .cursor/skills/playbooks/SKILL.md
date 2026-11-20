@@ -16,7 +16,7 @@ description: >-
 
 ## Read order
 
-1. `memory/activeContext.md` then `memory/progress.md` (always-on `agent-memory.mdc`)
+1. `memory/NOW.md` then `memory/MEMORY.md` (`memory-1` skill), and `docs/INDEX.md` (`docs-1` skill)
 2. `AGENTS.md`
 3. `docs/playbooks/SwiftBeans-adaptations.md`
 4. `docs/playbooks/spec-driven-development.md`

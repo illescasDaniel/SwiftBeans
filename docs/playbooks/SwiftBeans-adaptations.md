@@ -1,3 +1,17 @@
+---
+id: DOC-002
+title: SwiftBeans playbook adaptations
+summary: Package-specific overrides of the SDD playbook: library-shaped phases, no UI wireframes or simulator workflow, Swift Testing
+type: explanation
+status: current
+updated: 2026-11-20
+verified: 2026-11-20 5e3b9bf
+covers: [AGENTS.md, Package.swift, .cursor/skills/sdd-feature/**, .cursor/rules/sdd.mdc]
+related: [DOC-001, DOC-003]
+supersedes:
+superseded_by:
+---
+
 # SwiftBeans — Playbook Adaptations
 
 This project follows the SDD playbook with these **intentional adaptations** for a Swift package (dependency injection + macros), not an iOS app.
