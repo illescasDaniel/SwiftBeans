@@ -7,7 +7,7 @@
 - **System design:** [design/service-auto-init/DESIGN.md](../../design/service-auto-init/DESIGN.md)
 - **Design approved:** 2026-11-20 (chat).
 - **Design decisions approved:** 2026-11-20 (chat), together with the spec.
-- **Spec approved:** 2026-11-20 (chat). Phase 2 amendment (diagnostics reported once, by the macro) approved 2026-11-20 (chat). Phase 4 amendment (empty-init wording, optional-`let` diagnostic ID, `@Observable` backing-storage marker exemption) awaiting approval.
+- **Spec approved:** 2026-11-20 (chat). Phase 2 amendment (diagnostics reported once, by the macro) approved 2026-11-20 (chat). Phase 4 amendment (empty-init wording, optional-`let` diagnostic ID, `@Observable` backing-storage marker exemption) approved 2026-11-20 (chat).
 - **Related:** `specs/compile-time-di/SPEC.md` (initializer selection, memberwise rule, `@Assisted`), `specs/qualifiers/SPEC.md`, `specs/factory-injection/SPEC.md`, `specs/child-contexts/SPEC.md`.
 - **Affected modules:** `SwiftBeans` (macro declarations), `SwiftBeansSyntaxRules` (shared init model and rules), `SwiftBeansMacros` (`ServiceMacro`, marker macros), `SwiftBeansGeneratorCore` (`DeclarationScanner`; the generator-side property-marker diagnostics are removed). Plugin and generator CLI are unchanged.
 

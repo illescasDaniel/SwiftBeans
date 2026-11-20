@@ -74,7 +74,7 @@ The package exports two products: the `SwiftBeans` library and the `SwiftBeansPl
 
 ```swift
 dependencies: [
-	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.2.0")),
+	.package(url: "https://github.com/illescasDaniel/SwiftBeans", .upToNextMinor(from: "0.3.0")),
 ],
 targets: [
 	.target(

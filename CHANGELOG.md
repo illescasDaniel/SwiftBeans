@@ -4,12 +4,19 @@ All notable changes to SwiftBeans are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-20
+
 ### Added
 
+- Auto-generated initializers: `@Service(..., autoInit: true)` emits an initializer from the type's stored properties. It covers properties without a value at any access level, adds `@escaping` for closures, and turns `var x: T?` into an optional dependency. The generator injects through the generated initializer. `@Assisted` and `@Qualifier("…")` can now mark `let` properties of auto-init services. The example app and README use auto-init throughout (`specs/service-auto-init/SPEC.md`).
 - Child contexts: `@ChildContext(of:)`, stored `@ContextInput` values, `in:` ownership on services/beans/configurations, per-child singleton caches, parent-protocol delegation and positioned visibility/conflict diagnostics. Existing root-only output stays byte-identical.
 - Optional MainActor managed teardown: `ChildContextTeardown`, `ContextCleanup` and generated `close() async`, with identity-deduplicated singleton cleanup, shared completion and guarded resolution after closing begins. ARC remains the default.
 - Owner-aware child graph dumps and a login-required example with a root flow owner, transient child coordinator, user tab, session work cleanup, stale-login protection and hand-written child fakes.
 - Plugin-backed child integration tests, strict-concurrency generated-source fixtures, isolated lifecycle exit tests and root-output/resource-budget checks.
+
+### Changed
+
+- `@Assisted` / `@Qualifier` on a stored property outside an `autoInit: true` service is now a compile-time macro error (`assisted.property` / `qualifier.property`). The generator no longer reports these errors itself.
 
 ### Fixed
 
@@ -53,6 +60,7 @@ First public release.
 - `.swiftbeans.yml` to scan local packages, with automatic imports in generated code.
 - Example multiplatform app (`Examples/SwiftBeansExample`) that exercises every feature and doubles as a compile check for generated code.
 
-[Unreleased]: https://github.com/illescasDaniel/SwiftBeans/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/illescasDaniel/SwiftBeans/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/illescasDaniel/SwiftBeans/releases/tag/0.3.0
 [0.2.0]: https://github.com/illescasDaniel/SwiftBeans/releases/tag/0.2.0
 [0.1.0]: https://github.com/illescasDaniel/SwiftBeans/releases/tag/0.1.0
